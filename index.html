@@ -164,6 +164,75 @@
     max-width:86vw;text-align:center;
   }
   .toast.show{opacity:1;}
+
+  /* 設定 chip(音效/語音) */
+  .settings-row{display:flex;gap:10px;margin-top:4px;}
+  .chip{
+    font-family:inherit;font-weight:800;font-size:14px;
+    background:var(--white);border:3px solid var(--ink);border-radius:999px;
+    padding:8px 16px;cursor:pointer;color:var(--ink);
+    box-shadow:2px 2px 0 var(--ink);
+  }
+  .chip.off{opacity:.45;text-decoration:line-through;box-shadow:none;}
+
+  /* 手電筒亮起 */
+  #torchBtn{flex:0 0 auto;padding:12px 14px;}
+  #torchBtn.on{background:var(--yellow);box-shadow:0 5px 0 var(--ink),0 0 16px var(--yellow);}
+
+  /* 收據價格 */
+  .receipt .row small{font-weight:700;color:#B9A;font-size:14px;}
+  .receipt .row.total-row{border-top:3px solid var(--ink);border-bottom:none;
+    margin-top:4px;padding-top:10px;font-size:22px;}
+  .receipt .row.total-row .n{color:var(--green);}
+
+  /* 付錢畫面 */
+  #payScreen{align-items:center;justify-content:center;gap:12px;text-align:center;}
+  .pay-total{font-size:22px;font-weight:800;}
+  .pay-total b{color:var(--pink-deep);font-size:28px;}
+  .pay-paid{font-size:18px;font-weight:800;color:var(--green);}
+  .pay-hint{font-size:15px;font-weight:700;color:var(--ink);
+    background:var(--white);border:3px solid var(--ink);border-radius:14px;padding:6px 14px;}
+  .money-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+    width:min(340px,88vw);}
+  .money-btn{
+    font-family:inherit;font-weight:900;font-size:22px;color:var(--ink);
+    background:var(--yellow);border:4px solid var(--ink);border-radius:16px;
+    padding:18px 0;cursor:pointer;box-shadow:0 5px 0 var(--ink);
+    transition:transform .1s, box-shadow .1s;
+  }
+  .money-btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink);}
+  .btn.dim{opacity:.4;box-shadow:0 5px 0 var(--ink);cursor:not-allowed;}
+
+  /* 籃子 overlay */
+  #cartOverlay{
+    position:fixed;inset:0;background:rgba(68,51,68,.55);z-index:55;
+    display:none;align-items:flex-end;justify-content:center;
+  }
+  #cartOverlay.show{display:flex;}
+  .cart-panel{
+    background:var(--cream);border:4px solid var(--ink);
+    border-radius:24px 24px 0 0;width:min(440px,100%);
+    padding:20px 18px 24px;box-shadow:0 -6px 0 var(--pink-deep);
+    max-height:80vh;display:flex;flex-direction:column;gap:12px;
+    animation:slideUp .3s ease;
+  }
+  @keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+  .cart-panel h3{font-size:20px;text-align:center;letter-spacing:2px;}
+  .cart-list{overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:60px;}
+  .cart-item{
+    display:flex;align-items:center;gap:8px;
+    background:var(--white);border:3px solid var(--ink);border-radius:14px;padding:8px 12px;
+  }
+  .cart-item .ci-name{flex:1;font-weight:800;font-size:17px;}
+  .cart-item .ci-mid{font-weight:700;font-size:14px;color:#B9A;}
+  .ci-remove{
+    font-size:18px;background:var(--pink);border:3px solid var(--ink);border-radius:10px;
+    width:38px;height:38px;cursor:pointer;flex:0 0 auto;box-shadow:2px 2px 0 var(--ink);
+  }
+  .ci-remove:active{transform:translateY(2px);box-shadow:none;}
+  .cart-empty{text-align:center;color:#A89;font-weight:700;padding:20px;line-height:1.8;}
+  .cart-foot{display:flex;align-items:center;justify-content:space-between;
+    font-size:20px;font-weight:900;padding-top:6px;border-top:3px dashed #EBD;}
 </style>
 </head>
 <body>
@@ -183,6 +252,10 @@
     <p>拿起你的小卡片，<br>對準相機「嗶」一聲，<br>把菜菜放進購物籃吧!</p>
     <button class="btn btn-green" id="startBtn">▶ 開始掃描</button>
     <div class="db-badge" id="dbBadge">連線中…</div>
+    <div class="settings-row">
+      <button class="chip" id="toggleSound">🔊 音效</button>
+      <button class="chip" id="toggleVoice">🗣️ 語音</button>
+    </div>
   </section>
 
   <!-- SCAN -->
@@ -193,6 +266,7 @@
     </div>
     <div class="hint" id="hint">把條碼放進畫面裡 👀</div>
     <div class="scan-actions">
+      <button class="btn btn-ghost" id="torchBtn" title="手電筒">🔦</button>
       <button class="btn btn-ghost" id="stopBtn">⏸ 休息一下</button>
       <button class="btn btn-yellow" id="checkoutBtn">🧾 結帳!</button>
     </div>
@@ -204,9 +278,37 @@
     <h2>結帳完成!</h2>
     <div class="receipt" id="receipt"></div>
     <p style="font-weight:800" id="checkoutMsg"></p>
-    <button class="btn btn-pink" id="againBtn">🔄 再玩一次</button>
+    <div class="scan-actions" style="width:min(320px,86vw)">
+      <button class="btn btn-ghost" id="againBtn">🔄 再玩一次</button>
+      <button class="btn btn-green" id="payMoneyBtn">💰 去付錢</button>
+    </div>
+  </section>
+
+  <!-- PAY -->
+  <section class="screen" id="payScreen">
+    <h2 style="font-size:24px;letter-spacing:2px;">💰 付錢囉!</h2>
+    <div class="pay-total">要付 <b>$<span id="payTotal">0</span></b></div>
+    <div class="pay-paid">已付 $<span id="paidAmount">0</span></div>
+    <div class="pay-hint" id="payHint">點錢幣付錢吧!</div>
+    <div class="money-grid" id="moneyGrid"></div>
+    <div class="scan-actions" style="width:min(340px,88vw)">
+      <button class="btn btn-ghost" id="payUndoBtn">↩ 拿回</button>
+      <button class="btn btn-green dim" id="payDoneBtn" disabled>✔ 付好了</button>
+    </div>
   </section>
 </main>
+
+<!-- CART OVERLAY -->
+<div id="cartOverlay">
+  <div class="cart-panel">
+    <h3>🧺 我的籃子</h3>
+    <div class="cart-list" id="cartList"></div>
+    <div class="cart-foot">
+      <span>總共 $<span id="cartListTotal">0</span></span>
+      <button class="btn btn-yellow" id="cartClose" style="font-size:16px;padding:10px 22px">好了</button>
+    </div>
+  </div>
+</div>
 
 <!-- RESULT OVERLAY -->
 <div id="resultOverlay">
@@ -218,7 +320,7 @@
 <script>
 /* ================= data ================= */
 const DEFAULT_CARDS = {
-  "4710123456799": { name: "高麗菜", emoji: "🥬" }
+  "4710123456799": { name: "高麗菜", emoji: "🥬", price: 15 }
 };
 let cards = { ...DEFAULT_CARDS };
 let cart = [];
@@ -226,6 +328,24 @@ let scanner = null;
 let scanning = false;
 let lastCode = null, lastTime = 0;
 let paused = false;
+let torchOn = false;
+
+/* 付錢面額(元) */
+const MONEY = [1, 5, 10, 50, 100, 500];
+let paidStack = [];   // 已投入的錢幣,方便「拿回」
+let payTotal = 0;
+
+/* 家長設定,存 localStorage */
+let settings = { sound: true, voice: true };
+function loadSettings(){
+  try{
+    const s = localStorage.getItem("cashier-settings");
+    if(s) settings = { ...settings, ...JSON.parse(s) };
+  }catch(e){}
+}
+function saveSettings(){
+  try{ localStorage.setItem("cashier-settings", JSON.stringify(settings)); }catch(e){}
+}
 
 const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","🍄","🎃","🌶️","🍎","🍌","🍇","🍓","🍊","🍉","🥚","🥛","🍞","🧀","🐟","🍗"];
 const PRAISES = ["嗶!掃到囉!","太棒了!","好厲害!","嗶嗶~收到!","放進籃子囉!","你是掃描高手!"];
@@ -259,9 +379,9 @@ async function loadCards(){
   const badge = document.getElementById("dbBadge");
   if(!sb){ badge.textContent = "📴 離線模式(未設定資料庫)"; return; }
   try{
-    const { data, error } = await sb.from("cards").select("barcode,name,emoji");
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price");
     if(error) throw error;
-    (data || []).forEach(r => { cards[r.barcode] = { name: r.name, emoji: r.emoji }; });
+    (data || []).forEach(r => { cards[r.barcode] = { name: r.name, emoji: r.emoji, price: r.price ?? 10 }; });
     cacheLocal();
     badge.textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
     badge.classList.add("ok");
@@ -269,11 +389,11 @@ async function loadCards(){
     badge.textContent = "📴 離線模式(用上次的卡片)";
   }
 }
-async function saveCard(code, name, emoji){
-  cards[code] = { name, emoji };
+async function saveCard(code, name, emoji, price){
+  cards[code] = { name, emoji, price };
   cacheLocal();
   if(sb){
-    try{ await sb.from("cards").insert({ barcode: code, name, emoji }); }
+    try{ await sb.from("cards").insert({ barcode: code, name, emoji, price }); }
     catch(e){ /* offline or duplicate — local cache still has it */ }
   }
 }
@@ -283,7 +403,10 @@ async function logSession(){
       await sb.from("game_sessions").insert({
         game_type: "cashier",
         score: cart.length,
-        detail: { items: cart.map(i => ({ code: i.code, name: i.name })) }
+        detail: {
+          total: cartTotal(),
+          items: cart.map(i => ({ code: i.code, name: i.name, price: i.price }))
+        }
       });
     }catch(e){}
   }
@@ -292,6 +415,7 @@ async function logSession(){
 /* ================= sounds ================= */
 let audioCtx = null;
 function beep(freq=1250, dur=0.12, type="square"){
+  if(!settings.sound) return;
   try{
     audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
@@ -304,6 +428,7 @@ function beep(freq=1250, dur=0.12, type="square"){
 }
 function fanfare(){ beep(880,.12); setTimeout(()=>beep(1100,.12),120); setTimeout(()=>beep(1320,.25,"triangle"),240); }
 function speak(text){
+  if(!settings.voice) return;
   try{
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "zh-TW"; u.rate = 0.9; u.pitch = 1.3;
@@ -321,9 +446,40 @@ function toast(msg){
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
   clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 2600);
 }
+function cartTotal(){
+  return cart.reduce((s,i)=> s + (i.price || 0), 0);
+}
 function updateCart(){
   $("cartCount").textContent = cart.length;
   const p = $("cartPill"); p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump");
+  if($("cartOverlay").classList.contains("show")) renderCartList();
+}
+
+/* 打開籃子,可以把掃錯的商品拿掉 */
+function openCart(){
+  renderCartList();
+  $("cartOverlay").classList.add("show");
+}
+function closeCart(){ $("cartOverlay").classList.remove("show"); }
+function renderCartList(){
+  const counts = {};
+  cart.forEach(i=>{
+    counts[i.code] = counts[i.code] || { ...i, n: 0 };
+    counts[i.code].n++;
+  });
+  const rows = Object.values(counts).map(i=>`
+    <div class="cart-item">
+      <span class="ci-name">${esc(i.emoji)} ${esc(i.name)}</span>
+      <span class="ci-mid">$${i.price||0} × ${i.n}</span>
+      <button class="ci-remove" data-code="${esc(i.code)}">➖</button>
+    </div>`).join("");
+  $("cartList").innerHTML = rows ||
+    `<div class="cart-empty">籃子空空的 🧺<br>去掃幾張卡片吧!</div>`;
+  $("cartListTotal").textContent = cartTotal();
+}
+function removeOne(code){
+  const idx = cart.map(i=>i.code).lastIndexOf(code);
+  if(idx >= 0){ cart.splice(idx,1); updateCart(); beep(500,.06); }
 }
 function confetti(){
   for(let i=0;i<24;i++){
@@ -369,7 +525,20 @@ async function stopScanner(){
   if(scanner && scanning){
     try{ await scanner.stop(); scanner.clear(); }catch(e){}
   }
-  scanning = false; scanner = null;
+  scanning = false; scanner = null; torchOn = false;
+  $("torchBtn").classList.remove("on");
+}
+async function toggleTorch(){
+  if(!scanner || !scanning){ return; }
+  try{
+    torchOn = !torchOn;
+    await scanner.applyVideoConstraints({ advanced: [{ torch: torchOn }] });
+    $("torchBtn").classList.toggle("on", torchOn);
+  }catch(e){
+    torchOn = false;
+    $("torchBtn").classList.remove("on");
+    toast("這台裝置不支援手電筒 🔦");
+  }
 }
 function onScan(code){
   const now = Date.now();
@@ -412,6 +581,7 @@ function unknownCard(code){
       <h3>🆕 新卡片!這是什麼呢?</h3>
       <div class="code">${esc(code)}</div>
       <input id="newName" placeholder="輸入名字,例如:紅蘿蔔" maxlength="8">
+      <input id="newPrice" type="number" inputmode="numeric" min="1" max="999" value="10" placeholder="價格(元)">
       <div class="emoji-grid" id="emojiGrid">${grid}</div>
       <button class="btn btn-green" id="saveCardBtn" style="font-size:17px">✔ 記住這張卡</button>
       <button class="btn btn-ghost" id="skipCardBtn" style="font-size:15px;padding:10px">先跳過</button>
@@ -428,7 +598,10 @@ function unknownCard(code){
   $("saveCardBtn").addEventListener("click", async ()=>{
     const name = $("newName").value.trim();
     if(!name){ toast("先幫卡片取個名字吧 ✏️"); return; }
-    await saveCard(code, name, selEmoji);
+    let price = parseInt($("newPrice").value, 10);
+    if(isNaN(price) || price < 0){ price = 10; }
+    price = Math.min(price, 9999);
+    await saveCard(code, name, selEmoji, price);
     $("resultOverlay").classList.remove("show");
     paused = false;
     toast(`記住囉!下次掃到就是「${name}」`);
@@ -442,31 +615,128 @@ function unknownCard(code){
 
 function checkout(){
   stopScanner();
+  closeCart();
   logSession();
   const counts = {};
   cart.forEach(i=>{
     counts[i.code] = counts[i.code] || { ...i, n: 0 };
     counts[i.code].n++;
   });
+  const total = cartTotal();
   const rows = Object.values(counts)
-    .map(i=>`<div class="row"><span>${esc(i.emoji)} ${esc(i.name)}</span><span class="n">× ${i.n}</span></div>`)
+    .map(i=>`<div class="row"><span>${esc(i.emoji)} ${esc(i.name)} <small>$${i.price||0}</small></span><span class="n">× ${i.n}</span></div>`)
     .join("");
-  $("receipt").innerHTML = rows || `<div class="row"><span>籃子空空的 🧺</span></div>`;
+  const totalRow = cart.length
+    ? `<div class="row total-row"><span>總共</span><span class="n">$${total}</span></div>`
+    : "";
+  $("receipt").innerHTML = (rows + totalRow) || `<div class="row"><span>籃子空空的 🧺</span></div>`;
   $("checkoutMsg").textContent = cart.length
-    ? `一共買了 ${cart.length} 樣,你真是採買小達人!`
+    ? `一共買了 ${cart.length} 樣,要付 ${total} 元!`
     : "下次多掃幾張卡片試試看吧!";
+  $("payMoneyBtn").style.display = cart.length ? "" : "none";
   show("checkoutScreen");
-  if(cart.length){ fanfare(); confetti(); speak(`結帳完成,一共 ${cart.length} 樣,你好棒!`); }
+  if(cart.length){ fanfare(); confetti(); speak(`結帳完成,一共 ${total} 元`); }
+}
+
+/* ================= 付錢找零 ================= */
+function startPay(){
+  payTotal = cartTotal();
+  paidStack = [];
+  $("payTotal").textContent = payTotal;
+  const grid = MONEY.map(m=>
+    `<button class="money-btn" data-m="${m}">$${m}</button>`).join("");
+  $("moneyGrid").innerHTML = grid;
+  renderPaid();
+  show("payScreen");
+  speak(`請付 ${payTotal} 元`);
+}
+function paidAmount(){ return paidStack.reduce((a,b)=>a+b, 0); }
+function renderPaid(){
+  const paid = paidAmount();
+  $("paidAmount").textContent = paid;
+  const remain = payTotal - paid;
+  const done = $("payDoneBtn");
+  if(remain > 0){
+    $("payHint").textContent = `還差 ${remain} 元`;
+    done.disabled = true; done.classList.add("dim");
+  }else{
+    $("payHint").textContent = remain === 0 ? "剛剛好!可以付了 ✨" : "夠了!可以付了 ✨";
+    done.disabled = false; done.classList.remove("dim");
+  }
+}
+function addMoney(m){
+  paidStack.push(m);
+  beep(700 + m, .06);
+  renderPaid();
+}
+function undoMoney(){
+  if(paidStack.length){ paidStack.pop(); beep(400,.06); renderPaid(); }
+}
+function finishPay(){
+  const paid = paidAmount();
+  if(paid < payTotal){ toast("錢還不夠喔,再加一點 💰"); return; }
+  const change = paid - payTotal;
+  fanfare(); confetti();
+  const msg = change === 0 ? "剛剛好,不用找零!" : `找你 ${change} 元`;
+  speak("付款成功," + msg);
+  $("resultContent").innerHTML = `
+    <div class="praise">付款成功! 🎉</div>
+    <div class="result-card">
+      <div class="veg">💰</div>
+      <div class="veg-name">${esc(msg)}</div>
+    </div>
+    <button class="btn btn-pink" id="payAgainBtn" style="font-size:18px">🔄 再玩一次</button>`;
+  $("resultOverlay").classList.add("show");
+  $("payAgainBtn").addEventListener("click", async ()=>{
+    $("resultOverlay").classList.remove("show");
+    cart = []; updateCart(); await startScanner();
+  });
 }
 
 /* ================= events ================= */
 $("startBtn").addEventListener("click", async ()=>{ beep(900,.08); await startScanner(); });
 $("stopBtn").addEventListener("click", async ()=>{ await stopScanner(); show("startScreen"); });
 $("checkoutBtn").addEventListener("click", checkout);
+$("torchBtn").addEventListener("click", toggleTorch);
 $("againBtn").addEventListener("click", async ()=>{
   cart = []; updateCart(); await startScanner();
 });
+$("payMoneyBtn").addEventListener("click", startPay);
 
+/* 付錢面板 */
+$("moneyGrid").addEventListener("click", ev=>{
+  const b = ev.target.closest("button[data-m]");
+  if(b) addMoney(parseInt(b.dataset.m, 10));
+});
+$("payUndoBtn").addEventListener("click", undoMoney);
+$("payDoneBtn").addEventListener("click", finishPay);
+
+/* 籃子(移除商品) */
+$("cartPill").addEventListener("click", openCart);
+$("cartClose").addEventListener("click", closeCart);
+$("cartList").addEventListener("click", ev=>{
+  const b = ev.target.closest("button[data-code]");
+  if(b) removeOne(b.dataset.code);
+});
+
+/* 音效 / 語音開關 */
+function refreshSettingUI(){
+  $("toggleSound").classList.toggle("off", !settings.sound);
+  $("toggleVoice").classList.toggle("off", !settings.voice);
+  $("toggleSound").textContent = settings.sound ? "🔊 音效" : "🔇 音效";
+  $("toggleVoice").textContent = settings.voice ? "🗣️ 語音" : "🤫 語音";
+}
+$("toggleSound").addEventListener("click", ()=>{
+  settings.sound = !settings.sound; saveSettings(); refreshSettingUI();
+  if(settings.sound) beep(900,.08);
+});
+$("toggleVoice").addEventListener("click", ()=>{
+  settings.voice = !settings.voice; saveSettings(); refreshSettingUI();
+  if(settings.voice) speak("語音打開囉");
+});
+
+loadSettings();
+refreshSettingUI();
 initDb();
 loadCards();
 </script>
