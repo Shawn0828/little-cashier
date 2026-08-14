@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>小小收銀員 🛒</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+  :root{
+    --pink:#F7B7CF;
+    --pink-deep:#EE8FB6;
+    --cream:#FFF9F2;
+    --green:#6FBF4A;
+    --ink:#443344;
+    --yellow:#FFD666;
+    --white:#FFFFFF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:"PingFang TC","Heiti TC","Microsoft JhengHei",system-ui,sans-serif;
+    background:var(--cream);
+    color:var(--ink);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+    user-select:none;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;
+    background-image:radial-gradient(var(--pink) 1.5px, transparent 1.5px);
+    background-size:26px 26px;opacity:.25;
+  }
+
+  header{
+    padding:14px 18px 10px;
+    display:flex;align-items:center;justify-content:space-between;
+    position:relative;z-index:2;
+  }
+  header h1{font-size:22px;letter-spacing:2px;}
+  header h1 .emoji{font-size:26px;}
+  .cart-pill{
+    background:var(--white);border:3px solid var(--ink);border-radius:999px;
+    padding:6px 14px;font-weight:800;font-size:16px;
+    box-shadow:3px 3px 0 var(--pink-deep);
+    display:flex;align-items:center;gap:6px;
+  }
+  .cart-pill.bump{animation:bump .4s ease;}
+  @keyframes bump{30%{transform:scale(1.25) rotate(-6deg);}}
+
+  main{flex:1;display:flex;flex-direction:column;position:relative;z-index:1;padding:0 16px 16px;min-height:0;}
+
+  .screen{display:none;flex:1;flex-direction:column;min-height:0;}
+  .screen.active{display:flex;}
+
+  #startScreen{align-items:center;justify-content:center;text-align:center;gap:18px;}
+  .big-card{
+    background:var(--pink);border:4px solid var(--ink);border-radius:24px;
+    width:180px;padding:22px 16px 16px;
+    box-shadow:6px 6px 0 var(--ink);
+    transform:rotate(-3deg);
+    animation:float 3s ease-in-out infinite;
+  }
+  @keyframes float{50%{transform:rotate(-3deg) translateY(-8px);}}
+  .big-card .veg{font-size:72px;line-height:1;}
+  .big-card .veg-name{margin-top:10px;font-weight:900;font-size:20px;letter-spacing:4px;}
+  .big-card .bars{margin-top:12px;background:var(--white);border-radius:8px;padding:6px 8px;
+    background-image:repeating-linear-gradient(90deg,var(--ink) 0 2px,transparent 2px 5px,var(--ink) 5px 6px,transparent 6px 10px);
+    background-clip:content-box;height:34px;}
+  #startScreen p{font-size:16px;line-height:1.7;max-width:280px;}
+  .db-badge{font-size:12px;font-weight:700;color:#A89;}
+  .db-badge.ok{color:var(--green);}
+  .btn{
+    border:4px solid var(--ink);border-radius:999px;
+    font-family:inherit;font-weight:900;font-size:20px;letter-spacing:2px;
+    padding:14px 34px;cursor:pointer;color:var(--ink);
+    box-shadow:0 5px 0 var(--ink);
+    transition:transform .1s, box-shadow .1s;
+  }
+  .btn:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink);}
+  .btn-green{background:var(--green);color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.2);}
+  .btn-yellow{background:var(--yellow);}
+  .btn-pink{background:var(--pink);}
+  .btn-ghost{background:var(--white);}
+
+  #scanScreen{gap:12px;}
+  .camera-frame{
+    position:relative;flex:1;min-height:0;
+    border:4px solid var(--ink);border-radius:24px;overflow:hidden;
+    background:#222;box-shadow:6px 6px 0 var(--pink-deep);
+  }
+  #reader{width:100%;height:100%;}
+  #reader video{width:100%!important;height:100%!important;object-fit:cover;}
+  .scan-line{
+    position:absolute;left:10%;right:10%;height:4px;border-radius:4px;
+    background:var(--yellow);box-shadow:0 0 12px var(--yellow);
+    animation:scanline 1.6s ease-in-out infinite;pointer-events:none;z-index:5;
+  }
+  @keyframes scanline{0%,100%{top:20%;}50%{top:75%;}}
+  .hint{
+    text-align:center;font-size:15px;font-weight:700;color:var(--ink);
+    background:var(--white);border:3px solid var(--ink);border-radius:14px;padding:8px;
+  }
+  .scan-actions{display:flex;gap:10px;}
+  .scan-actions .btn{flex:1;font-size:16px;padding:12px 8px;}
+
+  #resultOverlay{
+    position:fixed;inset:0;background:rgba(255,249,242,.96);z-index:50;
+    display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px;
+  }
+  #resultOverlay.show{display:flex;}
+  .result-card{
+    background:var(--pink);border:5px solid var(--ink);border-radius:28px;
+    width:min(240px,70vw);padding:28px 20px 20px;text-align:center;
+    box-shadow:8px 8px 0 var(--ink);
+    animation:pop .45s cubic-bezier(.2,1.6,.4,1);
+  }
+  @keyframes pop{0%{transform:scale(.3) rotate(-15deg);opacity:0;}100%{transform:scale(1) rotate(0);opacity:1;}}
+  .result-card .veg{font-size:96px;line-height:1;animation:wiggle 1s ease .3s;}
+  @keyframes wiggle{25%{transform:rotate(-8deg);}50%{transform:rotate(8deg);}75%{transform:rotate(-4deg);}}
+  .result-card .veg-name{margin-top:12px;font-weight:900;font-size:28px;letter-spacing:6px;}
+  .praise{font-size:22px;font-weight:900;color:var(--pink-deep);animation:pop .5s .15s both;}
+
+  #newCardForm{
+    background:var(--white);border:4px solid var(--ink);border-radius:24px;
+    padding:20px;width:min(340px,88vw);box-shadow:6px 6px 0 var(--ink);
+    display:flex;flex-direction:column;gap:14px;
+  }
+  #newCardForm h3{font-size:18px;text-align:center;}
+  #newCardForm .code{font-size:12px;color:#997;text-align:center;font-family:monospace;}
+  #newCardForm input{
+    border:3px solid var(--ink);border-radius:12px;padding:12px;font-size:18px;
+    font-family:inherit;width:100%;text-align:center;
+  }
+  .emoji-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;}
+  .emoji-grid button{
+    font-size:26px;background:var(--cream);border:2px solid transparent;border-radius:10px;
+    padding:6px 0;cursor:pointer;
+  }
+  .emoji-grid button.sel{border-color:var(--ink);background:var(--yellow);}
+
+  #checkoutScreen{align-items:center;justify-content:center;gap:16px;text-align:center;}
+  #checkoutScreen h2{font-size:26px;letter-spacing:3px;}
+  .receipt{
+    background:var(--white);border:4px solid var(--ink);border-radius:18px;
+    width:min(320px,86vw);max-height:44vh;overflow:auto;padding:16px;
+    box-shadow:6px 6px 0 var(--pink-deep);
+  }
+  .receipt .row{display:flex;justify-content:space-between;align-items:center;
+    font-size:20px;font-weight:800;padding:8px 4px;border-bottom:2px dashed #EBD;}
+  .receipt .row:last-child{border-bottom:none;}
+  .receipt .row .n{color:var(--pink-deep);}
+  .stars{font-size:34px;letter-spacing:6px;animation:pop .6s both;}
+
+  .confetti{position:fixed;top:-20px;font-size:24px;z-index:60;pointer-events:none;
+    animation:fall linear forwards;}
+  @keyframes fall{to{transform:translateY(110vh) rotate(720deg);}}
+
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:#fff;border-radius:999px;padding:10px 20px;
+    font-size:14px;font-weight:700;z-index:70;opacity:0;transition:opacity .3s;
+    max-width:86vw;text-align:center;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="emoji">🛒</span> 小小收銀員</h1>
+  <div class="cart-pill" id="cartPill">🧺 <span id="cartCount">0</span></div>
+</header>
+
+<main>
+  <!-- START -->
+  <section class="screen active" id="startScreen">
+    <div class="big-card">
+      <div class="veg">🥬</div>
+      <div class="veg-name">高麗菜</div>
+      <div class="bars"></div>
+    </div>
+    <p>拿起你的小卡片，<br>對準相機「嗶」一聲，<br>把菜菜放進購物籃吧!</p>
+    <button class="btn btn-green" id="startBtn">▶ 開始掃描</button>
+    <div class="db-badge" id="dbBadge">連線中…</div>
+  </section>
+
+  <!-- SCAN -->
+  <section class="screen" id="scanScreen">
+    <div class="camera-frame">
+      <div id="reader"></div>
+      <div class="scan-line"></div>
+    </div>
+    <div class="hint" id="hint">把條碼放進畫面裡 👀</div>
+    <div class="scan-actions">
+      <button class="btn btn-ghost" id="stopBtn">⏸ 休息一下</button>
+      <button class="btn btn-yellow" id="checkoutBtn">🧾 結帳!</button>
+    </div>
+  </section>
+
+  <!-- CHECKOUT -->
+  <section class="screen" id="checkoutScreen">
+    <div class="stars">⭐⭐⭐</div>
+    <h2>結帳完成!</h2>
+    <div class="receipt" id="receipt"></div>
+    <p style="font-weight:800" id="checkoutMsg"></p>
+    <button class="btn btn-pink" id="againBtn">🔄 再玩一次</button>
+  </section>
+</main>
+
+<!-- RESULT OVERLAY -->
+<div id="resultOverlay">
+  <div id="resultContent"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= data ================= */
+const DEFAULT_CARDS = {
+  "4710123456799": { name: "高麗菜", emoji: "🥬" }
+};
+let cards = { ...DEFAULT_CARDS };
+let cart = [];
+let scanner = null;
+let scanning = false;
+let lastCode = null, lastTime = 0;
+let paused = false;
+
+const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","🍄","🎃","🌶️","🍎","🍌","🍇","🍓","🍊","🍉","🥚","🥛","🍞","🧀","🐟","🍗"];
+const PRAISES = ["嗶!掃到囉!","太棒了!","好厲害!","嗶嗶~收到!","放進籃子囉!","你是掃描高手!"];
+
+/* escape any user-provided string before putting it in HTML */
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+/* ================= supabase + local cache ================= */
+let sb = null;
+function initDb(){
+  try{
+    if(window.SUPA_URL && window.SUPA_KEY &&
+       !window.SUPA_URL.includes("YOUR_PROJECT") && window.supabase){
+      sb = window.supabase.createClient(window.SUPA_URL, window.SUPA_KEY);
+    }
+  }catch(e){ sb = null; }
+}
+function cacheLocal(){
+  try{ localStorage.setItem("cashier-cards", JSON.stringify(cards)); }catch(e){}
+}
+async function loadCards(){
+  // 1. local cache first — instant start, works offline
+  try{
+    const c = localStorage.getItem("cashier-cards");
+    if(c) cards = { ...DEFAULT_CARDS, ...JSON.parse(c) };
+  }catch(e){}
+  // 2. then sync from Supabase
+  const badge = document.getElementById("dbBadge");
+  if(!sb){ badge.textContent = "📴 離線模式(未設定資料庫)"; return; }
+  try{
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji");
+    if(error) throw error;
+    (data || []).forEach(r => { cards[r.barcode] = { name: r.name, emoji: r.emoji }; });
+    cacheLocal();
+    badge.textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
+    badge.classList.add("ok");
+  }catch(e){
+    badge.textContent = "📴 離線模式(用上次的卡片)";
+  }
+}
+async function saveCard(code, name, emoji){
+  cards[code] = { name, emoji };
+  cacheLocal();
+  if(sb){
+    try{ await sb.from("cards").insert({ barcode: code, name, emoji }); }
+    catch(e){ /* offline or duplicate — local cache still has it */ }
+  }
+}
+async function logSession(){
+  if(sb && cart.length){
+    try{
+      await sb.from("game_sessions").insert({
+        game_type: "cashier",
+        score: cart.length,
+        detail: { items: cart.map(i => ({ code: i.code, name: i.name })) }
+      });
+    }catch(e){}
+  }
+}
+
+/* ================= sounds ================= */
+let audioCtx = null;
+function beep(freq=1250, dur=0.12, type="square"){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.25, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  }catch(e){}
+}
+function fanfare(){ beep(880,.12); setTimeout(()=>beep(1100,.12),120); setTimeout(()=>beep(1320,.25,"triangle"),240); }
+function speak(text){
+  try{
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "zh-TW"; u.rate = 0.9; u.pitch = 1.3;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ================= ui helpers ================= */
+const $ = id => document.getElementById(id);
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(id).classList.add("active");
+}
+function toast(msg){
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 2600);
+}
+function updateCart(){
+  $("cartCount").textContent = cart.length;
+  const p = $("cartPill"); p.classList.remove("bump"); void p.offsetWidth; p.classList.add("bump");
+}
+function confetti(){
+  for(let i=0;i<24;i++){
+    const c = document.createElement("div");
+    c.className = "confetti";
+    c.textContent = ["🎉","⭐","🥬","🍅","💖","✨"][i%6];
+    c.style.left = Math.random()*100 + "vw";
+    c.style.animationDuration = (1.4 + Math.random()*1.6) + "s";
+    c.style.animationDelay = (Math.random()*0.5) + "s";
+    document.body.appendChild(c);
+    setTimeout(()=>c.remove(), 3500);
+  }
+}
+
+/* ================= scanner ================= */
+async function startScanner(){
+  show("scanScreen");
+  if(scanning) return;
+  const formats = [
+    Html5QrcodeSupportedFormats.EAN_13,
+    Html5QrcodeSupportedFormats.EAN_8,
+    Html5QrcodeSupportedFormats.UPC_A,
+    Html5QrcodeSupportedFormats.UPC_E,
+    Html5QrcodeSupportedFormats.CODE_128,
+    Html5QrcodeSupportedFormats.QR_CODE
+  ];
+  scanner = new Html5Qrcode("reader", { formatsToSupport: formats });
+  try{
+    await scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: (w,h)=>({ width: Math.floor(w*0.8), height: Math.floor(h*0.45) }) },
+      onScan,
+      ()=>{}
+    );
+    scanning = true;
+    $("hint").textContent = "把條碼放進畫面裡 👀";
+  }catch(err){
+    toast("打不開相機 😢 請檢查相機權限");
+    show("startScreen");
+  }
+}
+async function stopScanner(){
+  if(scanner && scanning){
+    try{ await scanner.stop(); scanner.clear(); }catch(e){}
+  }
+  scanning = false; scanner = null;
+}
+function onScan(code){
+  const now = Date.now();
+  if(paused) return;
+  if(code === lastCode && now - lastTime < 3000) return;
+  lastCode = code; lastTime = now;
+  if(cards[code]) foundCard(code);
+  else unknownCard(code);
+}
+
+/* ================= game flow ================= */
+function foundCard(code){
+  paused = true;
+  const item = cards[code];
+  cart.push({ code, ...item });
+  updateCart();
+  beep();
+  if(navigator.vibrate) navigator.vibrate(80);
+  speak(item.name);
+  $("resultContent").innerHTML = `
+    <div class="praise">${PRAISES[Math.floor(Math.random()*PRAISES.length)]}</div>
+    <div class="result-card">
+      <div class="veg">${esc(item.emoji)}</div>
+      <div class="veg-name">${esc(item.name)}</div>
+    </div>`;
+  $("resultOverlay").classList.add("show");
+  setTimeout(()=>{
+    $("resultOverlay").classList.remove("show");
+    paused = false;
+  }, 1900);
+}
+
+function unknownCard(code){
+  paused = true;
+  beep(600,.15,"sawtooth");
+  let selEmoji = "🥬";
+  const grid = EMOJIS.map(e=>`<button type="button" data-e="${e}" class="${e===selEmoji?'sel':''}">${e}</button>`).join("");
+  $("resultContent").innerHTML = `
+    <div id="newCardForm">
+      <h3>🆕 新卡片!這是什麼呢?</h3>
+      <div class="code">${esc(code)}</div>
+      <input id="newName" placeholder="輸入名字,例如:紅蘿蔔" maxlength="8">
+      <div class="emoji-grid" id="emojiGrid">${grid}</div>
+      <button class="btn btn-green" id="saveCardBtn" style="font-size:17px">✔ 記住這張卡</button>
+      <button class="btn btn-ghost" id="skipCardBtn" style="font-size:15px;padding:10px">先跳過</button>
+    </div>`;
+  $("resultOverlay").classList.add("show");
+
+  $("emojiGrid").addEventListener("click", ev=>{
+    const b = ev.target.closest("button[data-e]");
+    if(!b) return;
+    selEmoji = b.dataset.e;
+    document.querySelectorAll("#emojiGrid button").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel");
+  });
+  $("saveCardBtn").addEventListener("click", async ()=>{
+    const name = $("newName").value.trim();
+    if(!name){ toast("先幫卡片取個名字吧 ✏️"); return; }
+    await saveCard(code, name, selEmoji);
+    $("resultOverlay").classList.remove("show");
+    paused = false;
+    toast(`記住囉!下次掃到就是「${name}」`);
+    foundCard(code);
+  });
+  $("skipCardBtn").addEventListener("click", ()=>{
+    $("resultOverlay").classList.remove("show");
+    paused = false;
+  });
+}
+
+function checkout(){
+  stopScanner();
+  logSession();
+  const counts = {};
+  cart.forEach(i=>{
+    counts[i.code] = counts[i.code] || { ...i, n: 0 };
+    counts[i.code].n++;
+  });
+  const rows = Object.values(counts)
+    .map(i=>`<div class="row"><span>${esc(i.emoji)} ${esc(i.name)}</span><span class="n">× ${i.n}</span></div>`)
+    .join("");
+  $("receipt").innerHTML = rows || `<div class="row"><span>籃子空空的 🧺</span></div>`;
+  $("checkoutMsg").textContent = cart.length
+    ? `一共買了 ${cart.length} 樣,你真是採買小達人!`
+    : "下次多掃幾張卡片試試看吧!";
+  show("checkoutScreen");
+  if(cart.length){ fanfare(); confetti(); speak(`結帳完成,一共 ${cart.length} 樣,你好棒!`); }
+}
+
+/* ================= events ================= */
+$("startBtn").addEventListener("click", async ()=>{ beep(900,.08); await startScanner(); });
+$("stopBtn").addEventListener("click", async ()=>{ await stopScanner(); show("startScreen"); });
+$("checkoutBtn").addEventListener("click", checkout);
+$("againBtn").addEventListener("click", async ()=>{
+  cart = []; updateCart(); await startScanner();
+});
+
+initDb();
+loadCards();
+</script>
+</body>
+</html>
