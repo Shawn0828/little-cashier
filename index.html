@@ -102,6 +102,11 @@
     text-align:center;font-size:15px;font-weight:700;color:var(--ink);
     background:var(--white);border:3px solid var(--ink);border-radius:14px;padding:8px;
   }
+  .manual-link{
+    align-self:center;background:none;border:none;font-family:inherit;
+    font-size:14px;font-weight:700;color:var(--pink-deep);
+    text-decoration:underline;cursor:pointer;padding:2px 8px;
+  }
   .scan-actions{display:flex;gap:10px;}
   .scan-actions .btn{flex:1;font-size:16px;padding:12px 8px;}
 
@@ -265,6 +270,7 @@
       <div class="scan-line"></div>
     </div>
     <div class="hint" id="hint">把條碼放進畫面裡 👀</div>
+    <button class="manual-link" id="manualBtn">掃不到?⌨️ 手動輸入號碼</button>
     <div class="scan-actions">
       <button class="btn btn-ghost" id="torchBtn" title="手電筒">🔦</button>
       <button class="btn btn-ghost" id="stopBtn">⏸ 休息一下</button>
@@ -506,11 +512,18 @@ async function startScanner(){
     Html5QrcodeSupportedFormats.CODE_128,
     Html5QrcodeSupportedFormats.QR_CODE
   ];
-  scanner = new Html5Qrcode("reader", { formatsToSupport: formats });
+  scanner = new Html5Qrcode("reader", {
+    formatsToSupport: formats,
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+  });
   try{
     await scanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: (w,h)=>({ width: Math.floor(w*0.8), height: Math.floor(h*0.45) }) },
+      {
+        fps: 15,
+        // 較大的方形掃描區,QR / 條碼都比較好對準
+        qrbox: (w,h)=>{ const m = Math.floor(Math.min(w,h) * 0.78); return { width: m, height: m }; }
+      },
       onScan,
       ()=>{}
     );
@@ -547,6 +560,32 @@ function onScan(code){
   lastCode = code; lastTime = now;
   if(cards[code]) foundCard(code);
   else unknownCard(code);
+}
+
+/* 掃不到時的備援:直接輸入卡片號碼 */
+function manualEntry(){
+  paused = true;
+  $("resultContent").innerHTML = `
+    <div id="newCardForm">
+      <h3>⌨️ 手動輸入號碼</h3>
+      <p class="code">輸入卡片上印的號碼就好</p>
+      <input id="manualCode" inputmode="text" placeholder="例如 4710123456799" maxlength="20">
+      <button class="btn btn-green" id="manualGo" style="font-size:17px">✔ 送出</button>
+      <button class="btn btn-ghost" id="manualCancel" style="font-size:15px;padding:10px">取消</button>
+    </div>`;
+  $("resultOverlay").classList.add("show");
+  setTimeout(()=>{ try{ $("manualCode").focus(); }catch(e){} }, 100);
+  $("manualGo").addEventListener("click", ()=>{
+    const code = $("manualCode").value.trim();
+    $("resultOverlay").classList.remove("show");
+    paused = false;
+    if(!code){ return; }
+    lastCode = code; lastTime = Date.now();
+    if(cards[code]) foundCard(code); else unknownCard(code);
+  });
+  $("manualCancel").addEventListener("click", ()=>{
+    $("resultOverlay").classList.remove("show"); paused = false;
+  });
 }
 
 /* ================= game flow ================= */
@@ -698,6 +737,7 @@ $("startBtn").addEventListener("click", async ()=>{ beep(900,.08); await startSc
 $("stopBtn").addEventListener("click", async ()=>{ await stopScanner(); show("startScreen"); });
 $("checkoutBtn").addEventListener("click", checkout);
 $("torchBtn").addEventListener("click", toggleTorch);
+$("manualBtn").addEventListener("click", manualEntry);
 $("againBtn").addEventListener("click", async ()=>{
   cart = []; updateCart(); await startScanner();
 });

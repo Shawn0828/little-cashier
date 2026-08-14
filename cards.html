@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>卡片產生器 🖨️ — 小小收銀員</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+  :root{
+    --pink:#F7B7CF;--pink-deep:#EE8FB6;--cream:#FFF9F2;
+    --green:#6FBF4A;--ink:#443344;--yellow:#FFD666;--white:#FFFFFF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:"PingFang TC","Heiti TC","Microsoft JhengHei",system-ui,sans-serif;
+    background:var(--cream);color:var(--ink);padding:18px;max-width:900px;margin:0 auto;
+  }
+  h1{font-size:24px;letter-spacing:2px;margin-bottom:4px;}
+  .sub{font-size:14px;color:#997;margin-bottom:16px;}
+  .maker{
+    background:var(--white);border:4px solid var(--ink);border-radius:20px;
+    padding:18px;box-shadow:5px 5px 0 var(--pink-deep);margin-bottom:22px;
+  }
+  .maker h2{font-size:18px;margin-bottom:12px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+  input{
+    border:3px solid var(--ink);border-radius:12px;padding:10px 12px;font-size:17px;
+    font-family:inherit;
+  }
+  #mName{flex:1;min-width:140px;}
+  #mPrice{width:110px;}
+  .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:12px;}
+  .emoji-grid button{
+    font-size:24px;background:var(--cream);border:2px solid transparent;border-radius:10px;
+    padding:6px 0;cursor:pointer;
+  }
+  .emoji-grid button.sel{border-color:var(--ink);background:var(--yellow);}
+  .btn{
+    border:4px solid var(--ink);border-radius:999px;font-family:inherit;
+    font-weight:900;font-size:17px;letter-spacing:1px;padding:12px 24px;cursor:pointer;
+    color:var(--ink);box-shadow:0 4px 0 var(--ink);
+  }
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink);}
+  .btn-green{background:var(--green);color:#fff;}
+  .btn-yellow{background:var(--yellow);}
+  .bar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+  .badge{font-size:13px;font-weight:700;color:#A89;}
+  .badge.ok{color:var(--green);}
+
+  .sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;}
+  .card{
+    background:var(--pink);border:4px solid var(--ink);border-radius:18px;
+    padding:14px 10px 12px;text-align:center;box-shadow:4px 4px 0 var(--ink);
+    break-inside:avoid;
+  }
+  .card .emoji{font-size:52px;line-height:1;}
+  .card .name{font-weight:900;font-size:19px;letter-spacing:3px;margin:6px 0 2px;}
+  .card .price{font-weight:800;font-size:15px;color:var(--ink);margin-bottom:8px;}
+  .card .qr{background:#fff;border-radius:8px;padding:8px;display:inline-block;line-height:0;}
+  /* 螢幕上顯示 120px;方格保持銳利不做平滑 */
+  .card .qr img,.card .qr canvas{
+    display:block;width:120px;height:120px;
+    image-rendering:pixelated;image-rendering:crisp-edges;
+  }
+  .card .code{font-size:10px;color:#775;font-family:monospace;margin-top:6px;word-break:break-all;}
+  .empty{color:#A89;font-weight:700;padding:30px;text-align:center;}
+
+  @media print{
+    .no-print{display:none!important;}
+    body{background:#fff;padding:0;}
+    .card{box-shadow:none;}
+    .sheet{gap:10px;}
+    /* 列印時 QR 剛好 15mm,四周留 3mm 白邊(quiet zone) */
+    .card .qr{padding:3mm;}
+    .card .qr img,.card .qr canvas{width:15mm!important;height:15mm!important;}
+  }
+</style>
+</head>
+<body>
+  <h1>🖨️ 卡片產生器</h1>
+  <div class="sub">做一張卡片 → 印出來貼在東西上 → 用「小小收銀員」掃 QR code。QR 在 iPhone 上最好掃!</div>
+
+  <div class="maker no-print">
+    <h2>➕ 做一張新卡片</h2>
+    <div class="emoji-grid" id="emojiGrid"></div>
+    <div class="row">
+      <input id="mName" placeholder="名字,例如:紅蘿蔔" maxlength="8">
+      <input id="mPrice" type="number" inputmode="numeric" min="0" max="999" value="10" placeholder="價格">
+      <button class="btn btn-green" id="addBtn">產生卡片</button>
+    </div>
+  </div>
+
+  <div class="bar no-print">
+    <button class="btn btn-yellow" id="printBtn">🖨️ 列印全部卡片</button>
+    <span class="badge" id="badge">載入中…</span>
+  </div>
+
+  <div class="sheet" id="sheet"></div>
+
+<script>
+const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","🍄","🎃","🌶️","🍎","🍌","🍇","🍓","🍊","🍉","🥝","🍑","🥚","🥛","🍞","🧀","🐟","🍗","🍚","🍜","🧃","🍪","🍫","🍬"];
+const DEFAULT_CARDS = { "4710123456799": { name:"高麗菜", emoji:"🥬", price:15 } };
+let cards = { ...DEFAULT_CARDS };
+let selEmoji = "🥕";
+let sb = null;
+
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* emoji 選擇器 */
+$("emojiGrid").innerHTML = EMOJIS.map(e=>`<button data-e="${e}" class="${e===selEmoji?'sel':''}">${e}</button>`).join("");
+$("emojiGrid").addEventListener("click", ev=>{
+  const b = ev.target.closest("button[data-e]"); if(!b) return;
+  selEmoji = b.dataset.e;
+  document.querySelectorAll("#emojiGrid button").forEach(x=>x.classList.remove("sel"));
+  b.classList.add("sel");
+});
+
+/* DB + 本地快取(和遊戲共用同一份) */
+function initDb(){
+  try{
+    if(window.SUPA_URL && window.SUPA_KEY && !window.SUPA_URL.includes("YOUR_PROJECT") && window.supabase){
+      sb = window.supabase.createClient(window.SUPA_URL, window.SUPA_KEY);
+    }
+  }catch(e){ sb = null; }
+}
+function cacheLocal(){ try{ localStorage.setItem("cashier-cards", JSON.stringify(cards)); }catch(e){} }
+async function loadCards(){
+  try{ const c = localStorage.getItem("cashier-cards"); if(c) cards = { ...DEFAULT_CARDS, ...JSON.parse(c) }; }catch(e){}
+  if(!sb){ $("badge").textContent = "📴 離線模式(未設定資料庫)"; render(); return; }
+  try{
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price");
+    if(error) throw error;
+    (data||[]).forEach(r=>{ cards[r.barcode] = { name:r.name, emoji:r.emoji, price: r.price ?? 10 }; });
+    cacheLocal();
+    $("badge").textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
+    $("badge").classList.add("ok");
+  }catch(e){ $("badge").textContent = "📴 離線模式(用上次的卡片)"; }
+  render();
+}
+
+/* 產生一個 4 碼短編號(大寫英數,去掉易看錯的 0/O/1/I/L),自動避開重複 */
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function newCode(){
+  for(let tries=0; tries<80; tries++){
+    let c = "";
+    for(let i=0;i<4;i++) c += CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)];
+    if(!cards[c]) return c;          // 沒撞到就用
+  }
+  // 極少數情況全撞到,退回較長的碼確保唯一
+  return "Z" + Date.now().toString(36).slice(-5).toUpperCase();
+}
+
+async function addCard(){
+  const name = $("mName").value.trim();
+  if(!name){ alert("先幫卡片取個名字吧 ✏️"); return; }
+  let price = parseInt($("mPrice").value,10);
+  if(isNaN(price) || price < 0) price = 10;
+  price = Math.min(price, 9999);
+  const code = newCode();
+  cards[code] = { name, emoji: selEmoji, price };
+  cacheLocal();
+  if(sb){
+    try{
+      const { error } = await sb.from("cards")
+        .insert({ barcode: code, name, emoji: selEmoji, price });
+      if(error) throw error;
+    }catch(e){
+      // 不要無聲失敗:短碼會被舊的長度限制擋下來,要讓使用者看得到
+      const m = (e && e.message) ? e.message : String(e);
+      $("badge").classList.remove("ok");
+      $("badge").textContent = /check|constraint/i.test(m)
+        ? "⚠️ 資料庫擋下短碼:請先執行 db/003_shortcode.sql(卡片已存在這台裝置)"
+        : "⚠️ 未寫入資料庫:" + m + "(卡片已存在這台裝置)";
+    }
+  }
+  $("mName").value = "";
+  render();
+  // 捲到最後一張新卡
+  const el = $("sheet").lastElementChild; if(el) el.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+function render(){
+  const entries = Object.entries(cards);
+  if(!entries.length){ $("sheet").innerHTML = `<div class="empty">還沒有卡片,上面做一張吧!</div>`; return; }
+  $("sheet").innerHTML = "";
+  entries.forEach(([code,c])=>{
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="emoji">${esc(c.emoji||"📦")}</div>
+      <div class="name">${esc(c.name)}</div>
+      <div class="price">$${c.price ?? 0}</div>
+      <div class="qr"></div>
+      <div class="code">${esc(code)}</div>`;
+    $("sheet").appendChild(card);
+    new QRCode(card.querySelector(".qr"), {
+      text: code, width: 300, height: 300,   // 高解析,列印縮到 15mm 才不糊
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  });
+}
+
+$("addBtn").addEventListener("click", addCard);
+$("mName").addEventListener("keydown", e=>{ if(e.key==="Enter") addCard(); });
+$("printBtn").addEventListener("click", ()=>window.print());
+
+initDb();
+loadCards();
+</script>
+</body>
+</html>

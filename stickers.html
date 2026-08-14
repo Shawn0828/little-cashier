@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR 貼紙 🏷️ — 小小收銀員</title>
+<!-- qrcode-generator:支援 alphanumeric mode,短碼可用最小的 Version 1(21×21) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+  :root{
+    --pink:#F7B7CF;--pink-deep:#EE8FB6;--cream:#FFF9F2;
+    --green:#6FBF4A;--ink:#443344;--yellow:#FFD666;--white:#FFFFFF;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{
+    font-family:"PingFang TC","Heiti TC","Microsoft JhengHei",system-ui,sans-serif;
+    background:var(--cream);color:var(--ink);padding:18px;max-width:1000px;margin:0 auto;
+  }
+  h1{font-size:24px;letter-spacing:2px;margin-bottom:4px;}
+  .sub{font-size:14px;color:#997;margin-bottom:16px;line-height:1.7;}
+  .warn{
+    background:#FFF3CD;border:3px solid var(--ink);border-radius:14px;
+    padding:12px 14px;font-size:14px;line-height:1.7;margin-bottom:16px;font-weight:700;
+  }
+  .warn code{background:#fff;padding:1px 6px;border-radius:5px;font-size:13px;}
+  .panel{
+    background:var(--white);border:4px solid var(--ink);border-radius:20px;
+    padding:16px;box-shadow:5px 5px 0 var(--pink-deep);margin-bottom:20px;
+  }
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .btn{
+    border:4px solid var(--ink);border-radius:999px;font-family:inherit;
+    font-weight:900;font-size:16px;padding:11px 22px;cursor:pointer;
+    color:var(--ink);box-shadow:0 4px 0 var(--ink);background:var(--white);
+  }
+  .btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink);}
+  .btn-green{background:var(--green);color:#fff;}
+  .btn-yellow{background:var(--yellow);}
+  .badge{font-size:13px;font-weight:700;color:#A89;}
+  .badge.ok{color:var(--green);}
+  label.opt{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;}
+
+  table{width:100%;border-collapse:collapse;font-size:15px;}
+  th,td{padding:6px 8px;text-align:left;border-bottom:2px solid #F0E4EC;}
+  th{font-size:13px;color:#997;}
+  td.em{font-size:24px;width:44px;text-align:center;cursor:pointer;}
+  td.sc{font-family:ui-monospace,monospace;font-weight:900;font-size:17px;
+    color:var(--pink-deep);letter-spacing:1px;width:60px;}
+  input.pi{width:70px;border:2px solid var(--ink);border-radius:8px;padding:5px;
+    font-family:inherit;font-size:15px;text-align:right;}
+  input.ni{width:100%;border:2px solid transparent;border-radius:8px;padding:5px;
+    font-family:inherit;font-size:15px;font-weight:800;background:transparent;color:inherit;}
+  input.ni:focus{border-color:var(--ink);background:#fff;outline:none;}
+  td.code{font-family:monospace;font-size:12px;color:#BBA;}
+
+  /* 貼紙表(螢幕上就是實際列印大小,可拿尺對照) */
+  .sheet{background:#fff;border:3px dashed var(--pink-deep);border-radius:14px;padding:6px;}
+  .sticker{
+    display:inline-flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    width:24mm;margin:0;padding:1mm 0 0;break-inside:avoid;page-break-inside:avoid;
+  }
+  /* QR 固定 15mm,四周 2.5mm 白邊(quiet zone) */
+  .sticker .qr{background:#fff;padding:2.5mm;line-height:0;}
+  .sticker .qr svg{display:block;width:15mm;height:15mm;shape-rendering:crispEdges;}
+  .sticker .lb{font-size:7pt;font-weight:700;margin-top:.5mm;text-align:center;line-height:1.15;}
+  .sticker .sc{font-size:6.5pt;font-weight:900;font-family:ui-monospace,monospace;letter-spacing:.5px;}
+
+  .previewNote{font-size:13px;color:#997;margin-top:8px;line-height:1.6;}
+
+  @media print{
+    .no-print{display:none!important;}
+    body{background:#fff;padding:0;max-width:none;}
+    .sheet{border:none;padding:0;font-size:0;}
+    .sticker{display:inline-flex;vertical-align:top;}
+    @page{margin:10mm;}
+  }
+</style>
+</head>
+<body>
+
+<h1>🏷️ 幫現有卡片做 QR 貼紙(短碼版)</h1>
+<div class="sub">
+  40 張卡片改用<b>短碼</b>:分類字母 + 編號,例如 <b>V09</b> = 高麗菜、<b>R05</b> = 白米。<br>
+  短碼寫死在檔案裡<b>不會變動</b>,重印時編號一定一樣;掃不到時也很好手動輸入。
+</div>
+
+<div class="warn no-print">
+  ⚠️ 匯入前請先在 Supabase SQL Editor 執行 <code>db/003_shortcode.sql</code>。<br>
+  資料庫原本限制條碼要 6~20 碼,3 碼短碼會被擋下來,執行後才寫得進去。
+</div>
+
+<div class="panel no-print">
+  <div class="bar">
+    <button class="btn btn-green" id="importBtn">☁️ 匯入這 40 張到資料庫</button>
+    <button class="btn btn-yellow" id="printBtn">🖨️ 列印 QR 貼紙(15mm)</button>
+    <span class="badge" id="badge">載入中…</span>
+  </div>
+  <div class="bar" style="margin-top:12px">
+    <label class="opt"><input type="checkbox" id="showName" checked> 貼紙印名字</label>
+    <label class="opt"><input type="checkbox" id="showCode" checked> 貼紙印短碼</label>
+    <label class="opt"><input type="checkbox" id="alsoOrig"> 同時註冊原本的長條碼</label>
+  </div>
+  <div class="previewNote">
+    名字、價格可直接在下面表格改(點 emoji 換圖),改完再按匯入。<br>
+    勾「同時註冊原本的長條碼」= 連卡片上原本的 14 位數也一起寫進資料庫,這樣掃原條碼也認得
+    (代價是資料庫會有兩筆指到同一樣商品)。
+  </div>
+</div>
+
+<div class="panel no-print">
+  <table>
+    <thead><tr><th>圖</th><th>短碼</th><th>名字</th><th>價格</th><th>分類</th><th>原條碼</th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<div class="sheet" id="sheet"></div>
+
+<script>
+/* ============================================================
+   40 張卡片
+   short:短碼 = 分類字母 + 流水號(寫死,不可隨意更動,否則已印的貼紙會對不上)
+     V 蔬菜 / F 水果 / M 肉類 / S 海鮮 / E 蛋豆
+     D 乳品 / R 主食 / T 調味 / K 零食 / H 日用
+   seq:卡片上原本印的條碼尾碼(前綴 4710012345)
+   ============================================================ */
+const PREFIX = "4710012345";
+const ITEMS = [
+  //seq  short  name        emoji price category
+  [6789,"V01","金針菇","🍄",25,"蔬菜"],
+  [6790,"S01","鮭魚","🐟",120,"海鮮"],
+  [6791,"V02","玉米筍","🌽",30,"蔬菜"],
+  [6792,"V03","青花菜","🥦",40,"蔬菜"],
+  [6793,"V04","秋葵","🫛",30,"蔬菜"],
+  [6794,"V05","水蓮","🥬",35,"蔬菜"],
+  [6795,"V06","竹筍","🎋",45,"蔬菜"],
+  [6796,"S02","干貝","🐚",150,"海鮮"],
+  [6797,"V07","蒜頭","🧄",25,"蔬菜"],
+  [6798,"V08","南瓜","🎃",50,"蔬菜"],
+  [6799,"V09","高麗菜","🥬",35,"蔬菜"],
+  [6800,"F01","草莓","🍓",90,"水果"],
+  [6801,"V10","絲瓜","🥒",30,"蔬菜"],
+  [6802,"M01","雞腿","🍗",80,"肉類"],
+  [6803,"V11","香菇","🍄",40,"蔬菜"],
+  [6804,"E01","雞蛋","🥚",65,"蛋豆"],
+  [6805,"M02","香腸","🌭",70,"肉類"],
+  [6806,"E02","豆腐","🧈",20,"蛋豆"],
+  [6807,"R01","烏龍麵","🍜",45,"主食"],
+  [6808,"S03","蝦仁","🍤",130,"海鮮"],
+  [6809,"T01","醬油","🍶",60,"調味"],
+  [6810,"D01","優酪乳","🥤",30,"乳品"],
+  [6811,"D02","豆漿","🥛",25,"乳品"],
+  [6812,"D03","鮮奶","🥛",85,"乳品"],
+  [6813,"T02","沙拉油","🫗",130,"調味"],
+  [6814,"K01","海苔","🍙",45,"零食"],
+  [6815,"R02","義大利麵","🍝",75,"主食"],
+  [6816,"R03","米粉","🍜",35,"主食"],
+  [6817,"R04","綠豆","🫘",50,"主食"],
+  [6818,"R05","白米","🍚",180,"主食"],
+  [6819,"R06","銀絲卷","🍞",40,"主食"],
+  [6820,"R07","水餃","🥟",90,"主食"],
+  [6821,"K02","仙貝","🍘",55,"零食"],
+  [6822,"R08","麵粉","🌾",45,"主食"],
+  [6823,"R09","蕎麥麵","🍜",60,"主食"],
+  [6824,"K03","冰棒","🍦",20,"零食"],
+  [6825,"H01","洗衣粉","🧼",150,"日用"],
+  [6826,"H02","牙膏","🪥",75,"日用"],
+  [6827,"H03","清潔劑","🧴",80,"日用"],
+  [6828,"R10","泡麵","🍜",25,"主食"]
+];
+const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","🍄","🎃","🌶️","🍎","🍌","🍇","🍓","🍊","🍉","🥚","🥛","🍞","🧀","🐟","🍗","🍜","🍚","🍙","🍘","🥟","🍤","🐚","🌭","🍝","🌾","🫘","🍦","🧼","🪥","🧴","🍶","🫗","🥤","🧈","🎋","🫛","🧄"];
+
+const rows = ITEMS.map(([seq,short,name,emoji,price,category])=>({
+  code: short, orig: PREFIX + seq, name, emoji, price, category
+}));
+
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ---------- 表格 ---------- */
+function renderTable(){
+  $("tbody").innerHTML = rows.map((r,i)=>`
+    <tr>
+      <td class="em" data-i="${i}" title="點一下換圖">${esc(r.emoji)}</td>
+      <td class="sc">${esc(r.code)}</td>
+      <td><input class="ni" data-i="${i}" value="${esc(r.name)}" maxlength="8"></td>
+      <td>$<input class="pi" type="number" min="0" max="9999" data-i="${i}" value="${r.price}"></td>
+      <td>${esc(r.category)}</td>
+      <td class="code">${esc(r.orig)}</td>
+    </tr>`).join("");
+}
+$("tbody").addEventListener("input", ev=>{
+  const el = ev.target, i = +el.dataset.i;
+  if(el.classList.contains("ni")) rows[i].name = el.value;
+  if(el.classList.contains("pi")){
+    let p = parseInt(el.value,10);
+    rows[i].price = (isNaN(p)||p<0) ? 0 : Math.min(p,9999);
+  }
+  renderStickers();
+});
+$("tbody").addEventListener("click", ev=>{
+  const td = ev.target.closest("td.em"); if(!td) return;
+  const i = +td.dataset.i;
+  const cur = EMOJIS.indexOf(rows[i].emoji);
+  rows[i].emoji = EMOJIS[(cur+1) % EMOJIS.length];
+  td.textContent = rows[i].emoji;
+});
+
+/* ---------- 貼紙 ---------- */
+function renderStickers(){
+  const withName = $("showName").checked;
+  const withCode = $("showCode").checked;
+  $("sheet").innerHTML = "";
+  rows.forEach(r=>{
+    const s = document.createElement("div");
+    s.className = "sticker";
+    s.innerHTML = `<div class="qr"></div>` +
+      (withName ? `<div class="lb">${esc(r.emoji)} ${esc(r.name)}</div>` : "") +
+      (withCode ? `<div class="sc">${esc(r.code)}</div>` : "");
+    $("sheet").appendChild(s);
+    // 短碼是大寫英數 → alphanumeric mode,容錯拉到最高的 H 仍只需 21×21
+    const q = qrcode(0, "H");
+    q.addData(r.code);
+    q.make();
+    // SVG 向量輸出,印再小都不糊
+    s.querySelector(".qr").innerHTML = q.createSvgTag({ cellSize: 1, margin: 0, scalable: true });
+  });
+}
+$("showName").addEventListener("change", renderStickers);
+$("showCode").addEventListener("change", renderStickers);
+$("printBtn").addEventListener("click", ()=>window.print());
+
+/* ---------- DB ---------- */
+let sb = null;
+function initDb(){
+  try{
+    if(window.SUPA_URL && window.SUPA_KEY && !window.SUPA_URL.includes("YOUR_PROJECT") && window.supabase){
+      sb = window.supabase.createClient(window.SUPA_URL, window.SUPA_KEY);
+    }
+  }catch(e){ sb = null; }
+  $("badge").textContent = sb ? "☁️ 已連線,可以匯入" : "📴 未設定資料庫(仍可存在這台裝置)";
+  if(sb) $("badge").classList.add("ok");
+}
+function buildPayload(){
+  const out = [];
+  rows.forEach(r=>{
+    out.push({ barcode:r.code, name:r.name, emoji:r.emoji, price:r.price, category:r.category });
+    if($("alsoOrig").checked){
+      out.push({ barcode:r.orig, name:r.name, emoji:r.emoji, price:r.price, category:r.category });
+    }
+  });
+  return out;
+}
+function mergeLocal(payload){
+  // 併進遊戲用的 localStorage,遊戲離線也認得
+  try{
+    const cur = JSON.parse(localStorage.getItem("cashier-cards") || "{}");
+    payload.forEach(p=>{ cur[p.barcode] = { name:p.name, emoji:p.emoji, price:p.price }; });
+    localStorage.setItem("cashier-cards", JSON.stringify(cur));
+    return true;
+  }catch(e){ return false; }
+}
+$("importBtn").addEventListener("click", async ()=>{
+  const payload = buildPayload();
+  const localOk = mergeLocal(payload);
+  if(!sb){
+    $("badge").textContent = localOk
+      ? `✅ 已存 ${payload.length} 筆到這台裝置(未連資料庫)`
+      : "⚠️ 這台裝置無法儲存";
+    return;
+  }
+  $("badge").textContent = "⏳ 匯入中…";
+  $("badge").classList.remove("ok");
+  try{
+    // 只 insert、遇到已存在就跳過(anon 只有 insert 權限)
+    const { error } = await sb.from("cards")
+      .upsert(payload, { onConflict:"barcode", ignoreDuplicates:true });
+    if(error) throw error;
+    $("badge").textContent = `✅ 完成!已匯入 ${payload.length} 筆(重複的自動略過)`;
+    $("badge").classList.add("ok");
+  }catch(e){
+    const m = (e && e.message) ? e.message : String(e);
+    $("badge").textContent = /check|constraint/i.test(m)
+      ? "⚠️ 被資料庫限制擋下:請先執行 db/003_shortcode.sql(已存在這台裝置)"
+      : "⚠️ 匯入失敗:" + m + "(已存在這台裝置)";
+  }
+});
+
+initDb();
+renderTable();
+renderStickers();
+</script>
+</body>
+</html>
