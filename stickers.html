@@ -7,7 +7,8 @@
 <!-- qrcode-generator:支援 alphanumeric mode,短碼可用最小的 Version 1(21×21) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
+<!-- ?v= 版本號:強制瀏覽器/CDN 重抓,改了 config.js 才會立刻生效 -->
+<script src="config.js?v=2"></script>
 <style>
   :root{
     --pink:#F7B7CF;--pink-deep:#EE8FB6;--cream:#FFF9F2;
@@ -40,6 +41,8 @@
   .btn-yellow{background:var(--yellow);}
   .badge{font-size:13px;font-weight:700;color:#A89;}
   .badge.ok{color:var(--green);}
+  .diag{font-size:12px;color:#A89;margin-top:8px;word-break:break-all;}
+  .diag code{background:var(--cream);padding:2px 6px;border-radius:5px;font-size:12px;}
   label.opt{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;}
 
   table{width:100%;border-collapse:collapse;font-size:15px;}
@@ -53,6 +56,11 @@
   input.ni{width:100%;border:2px solid transparent;border-radius:8px;padding:5px;
     font-family:inherit;font-size:15px;font-weight:800;background:transparent;color:inherit;}
   input.ni:focus{border-color:var(--ink);background:#fff;outline:none;}
+  td.enc{white-space:nowrap;}
+  input.ei{width:130px;border:2px solid transparent;border-radius:8px;padding:5px;
+    font-family:inherit;font-size:14px;font-weight:700;color:var(--pink-deep);background:transparent;}
+  input.ei:focus{border-color:var(--ink);background:#fff;outline:none;}
+  button.say{background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;}
   td.code{font-family:monospace;font-size:12px;color:#BBA;}
 
   /* 貼紙表(螢幕上就是實際列印大小,可拿尺對照) */
@@ -65,6 +73,7 @@
   .sticker .qr{background:#fff;padding:2.5mm;line-height:0;}
   .sticker .qr svg{display:block;width:15mm;height:15mm;shape-rendering:crispEdges;}
   .sticker .lb{font-size:7pt;font-weight:700;margin-top:.5mm;text-align:center;line-height:1.15;}
+  .sticker .en{font-size:6pt;font-weight:700;color:#666;text-align:center;line-height:1.1;}
   .sticker .sc{font-size:6.5pt;font-weight:900;font-family:ui-monospace,monospace;letter-spacing:.5px;}
 
   .previewNote{font-size:13px;color:#997;margin-top:8px;line-height:1.6;}
@@ -97,9 +106,11 @@
     <button class="btn btn-yellow" id="printBtn">🖨️ 列印 QR 貼紙(15mm)</button>
     <span class="badge" id="badge">載入中…</span>
   </div>
+  <div class="diag" id="diag"></div>
   <div class="bar" style="margin-top:12px">
     <label class="opt"><input type="checkbox" id="showName" checked> 貼紙印名字</label>
     <label class="opt"><input type="checkbox" id="showCode" checked> 貼紙印短碼</label>
+    <label class="opt"><input type="checkbox" id="showEn"> 貼紙印英文</label>
     <label class="opt"><input type="checkbox" id="alsoOrig"> 同時註冊原本的長條碼</label>
   </div>
   <div class="previewNote">
@@ -111,7 +122,7 @@
 
 <div class="panel no-print">
   <table>
-    <thead><tr><th>圖</th><th>短碼</th><th>名字</th><th>價格</th><th>分類</th><th>原條碼</th></tr></thead>
+    <thead><tr><th>圖</th><th>短碼</th><th>名字</th><th>英文(點🔊試聽)</th><th>價格</th><th>分類</th><th>原條碼</th></tr></thead>
     <tbody id="tbody"></tbody>
   </table>
 </div>
@@ -128,52 +139,52 @@
    ============================================================ */
 const PREFIX = "4710012345";
 const ITEMS = [
-  //seq  short  name        emoji price category
-  [6789,"V01","金針菇","🍄",25,"蔬菜"],
-  [6790,"S01","鮭魚","🐟",120,"海鮮"],
-  [6791,"V02","玉米筍","🌽",30,"蔬菜"],
-  [6792,"V03","青花菜","🥦",40,"蔬菜"],
-  [6793,"V04","秋葵","🫛",30,"蔬菜"],
-  [6794,"V05","水蓮","🥬",35,"蔬菜"],
-  [6795,"V06","竹筍","🎋",45,"蔬菜"],
-  [6796,"S02","干貝","🐚",150,"海鮮"],
-  [6797,"V07","蒜頭","🧄",25,"蔬菜"],
-  [6798,"V08","南瓜","🎃",50,"蔬菜"],
-  [6799,"V09","高麗菜","🥬",35,"蔬菜"],
-  [6800,"F01","草莓","🍓",90,"水果"],
-  [6801,"V10","絲瓜","🥒",30,"蔬菜"],
-  [6802,"M01","雞腿","🍗",80,"肉類"],
-  [6803,"V11","香菇","🍄",40,"蔬菜"],
-  [6804,"E01","雞蛋","🥚",65,"蛋豆"],
-  [6805,"M02","香腸","🌭",70,"肉類"],
-  [6806,"E02","豆腐","🧈",20,"蛋豆"],
-  [6807,"R01","烏龍麵","🍜",45,"主食"],
-  [6808,"S03","蝦仁","🍤",130,"海鮮"],
-  [6809,"T01","醬油","🍶",60,"調味"],
-  [6810,"D01","優酪乳","🥤",30,"乳品"],
-  [6811,"D02","豆漿","🥛",25,"乳品"],
-  [6812,"D03","鮮奶","🥛",85,"乳品"],
-  [6813,"T02","沙拉油","🫗",130,"調味"],
-  [6814,"K01","海苔","🍙",45,"零食"],
-  [6815,"R02","義大利麵","🍝",75,"主食"],
-  [6816,"R03","米粉","🍜",35,"主食"],
-  [6817,"R04","綠豆","🫘",50,"主食"],
-  [6818,"R05","白米","🍚",180,"主食"],
-  [6819,"R06","銀絲卷","🍞",40,"主食"],
-  [6820,"R07","水餃","🥟",90,"主食"],
-  [6821,"K02","仙貝","🍘",55,"零食"],
-  [6822,"R08","麵粉","🌾",45,"主食"],
-  [6823,"R09","蕎麥麵","🍜",60,"主食"],
-  [6824,"K03","冰棒","🍦",20,"零食"],
-  [6825,"H01","洗衣粉","🧼",150,"日用"],
-  [6826,"H02","牙膏","🪥",75,"日用"],
-  [6827,"H03","清潔劑","🧴",80,"日用"],
-  [6828,"R10","泡麵","🍜",25,"主食"]
+  //seq  short  name        emoji price category  english
+  [6789,"V01","金針菇","🍄",25,"蔬菜","Enoki Mushroom"],
+  [6790,"S01","鮭魚","🐟",120,"海鮮","Salmon"],
+  [6791,"V02","玉米筍","🌽",30,"蔬菜","Baby Corn"],
+  [6792,"V03","青花菜","🥦",40,"蔬菜","Broccoli"],
+  [6793,"V04","秋葵","🫛",30,"蔬菜","Okra"],
+  [6794,"V05","水蓮","🥬",35,"蔬菜","Water Lily"],
+  [6795,"V06","竹筍","🎋",45,"蔬菜","Bamboo Shoot"],
+  [6796,"S02","干貝","🐚",150,"海鮮","Scallop"],
+  [6797,"V07","蒜頭","🧄",25,"蔬菜","Garlic"],
+  [6798,"V08","南瓜","🎃",50,"蔬菜","Pumpkin"],
+  [6799,"V09","高麗菜","🥬",35,"蔬菜","Cabbage"],
+  [6800,"F01","草莓","🍓",90,"水果","Strawberry"],
+  [6801,"V10","絲瓜","🥒",30,"蔬菜","Loofah"],
+  [6802,"M01","雞腿","🍗",80,"肉類","Chicken Leg"],
+  [6803,"V11","香菇","🍄",40,"蔬菜","Shiitake"],
+  [6804,"E01","雞蛋","🥚",65,"蛋豆","Egg"],
+  [6805,"M02","香腸","🌭",70,"肉類","Sausage"],
+  [6806,"E02","豆腐","🧈",20,"蛋豆","Tofu"],
+  [6807,"R01","烏龍麵","🍜",45,"主食","Udon"],
+  [6808,"S03","蝦仁","🍤",130,"海鮮","Shrimp"],
+  [6809,"T01","醬油","🍶",60,"調味","Soy Sauce"],
+  [6810,"D01","優酪乳","🥤",30,"乳品","Yogurt"],
+  [6811,"D02","豆漿","🥛",25,"乳品","Soy Milk"],
+  [6812,"D03","鮮奶","🥛",85,"乳品","Milk"],
+  [6813,"T02","沙拉油","🫗",130,"調味","Cooking Oil"],
+  [6814,"K01","海苔","🍙",45,"零食","Seaweed"],
+  [6815,"R02","義大利麵","🍝",75,"主食","Pasta"],
+  [6816,"R03","米粉","🍜",35,"主食","Rice Noodles"],
+  [6817,"R04","綠豆","🫘",50,"主食","Mung Bean"],
+  [6818,"R05","白米","🍚",180,"主食","Rice"],
+  [6819,"R06","銀絲卷","🍞",40,"主食","Steamed Bun"],
+  [6820,"R07","水餃","🥟",90,"主食","Dumpling"],
+  [6821,"K02","仙貝","🍘",55,"零食","Rice Cracker"],
+  [6822,"R08","麵粉","🌾",45,"主食","Flour"],
+  [6823,"R09","蕎麥麵","🍜",60,"主食","Soba"],
+  [6824,"K03","冰棒","🍦",20,"零食","Popsicle"],
+  [6825,"H01","洗衣粉","🧼",150,"日用","Laundry Powder"],
+  [6826,"H02","牙膏","🪥",75,"日用","Toothpaste"],
+  [6827,"H03","清潔劑","🧴",80,"日用","Cleaner"],
+  [6828,"R10","泡麵","🍜",25,"主食","Instant Noodles"]
 ];
 const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","🍄","🎃","🌶️","🍎","🍌","🍇","🍓","🍊","🍉","🥚","🥛","🍞","🧀","🐟","🍗","🍜","🍚","🍙","🍘","🥟","🍤","🐚","🌭","🍝","🌾","🫘","🍦","🧼","🪥","🧴","🍶","🫗","🥤","🧈","🎋","🫛","🧄"];
 
-const rows = ITEMS.map(([seq,short,name,emoji,price,category])=>({
-  code: short, orig: PREFIX + seq, name, emoji, price, category
+const rows = ITEMS.map(([seq,short,name,emoji,price,category,en])=>({
+  code: short, orig: PREFIX + seq, name, emoji, price, category, en
 }));
 
 const $ = id => document.getElementById(id);
@@ -186,6 +197,10 @@ function renderTable(){
       <td class="em" data-i="${i}" title="點一下換圖">${esc(r.emoji)}</td>
       <td class="sc">${esc(r.code)}</td>
       <td><input class="ni" data-i="${i}" value="${esc(r.name)}" maxlength="8"></td>
+      <td class="enc">
+        <button class="say" data-i="${i}" title="唸唸看">🔊</button>
+        <input class="ei" data-i="${i}" value="${esc(r.en)}" maxlength="30">
+      </td>
       <td>$<input class="pi" type="number" min="0" max="9999" data-i="${i}" value="${r.price}"></td>
       <td>${esc(r.category)}</td>
       <td class="code">${esc(r.orig)}</td>
@@ -194,11 +209,28 @@ function renderTable(){
 $("tbody").addEventListener("input", ev=>{
   const el = ev.target, i = +el.dataset.i;
   if(el.classList.contains("ni")) rows[i].name = el.value;
+  if(el.classList.contains("ei")) rows[i].en = el.value;
   if(el.classList.contains("pi")){
     let p = parseInt(el.value,10);
     rows[i].price = (isNaN(p)||p<0) ? 0 : Math.min(p,9999);
   }
   renderStickers();
+});
+/* 試聽英文,確認發音對不對 */
+$("tbody").addEventListener("click", ev=>{
+  const b = ev.target.closest("button.say"); if(!b) return;
+  const r = rows[+b.dataset.i];
+  try{
+    speechSynthesis.cancel();
+    const u1 = new SpeechSynthesisUtterance(r.name);
+    u1.lang = "zh-TW"; u1.rate = .9; u1.pitch = 1.3;
+    speechSynthesis.speak(u1);
+    if(r.en){
+      const u2 = new SpeechSynthesisUtterance(r.en);
+      u2.lang = "en-US"; u2.rate = .75; u2.pitch = 1.15;
+      speechSynthesis.speak(u2);
+    }
+  }catch(e){}
 });
 $("tbody").addEventListener("click", ev=>{
   const td = ev.target.closest("td.em"); if(!td) return;
@@ -218,6 +250,7 @@ function renderStickers(){
     s.className = "sticker";
     s.innerHTML = `<div class="qr"></div>` +
       (withName ? `<div class="lb">${esc(r.emoji)} ${esc(r.name)}</div>` : "") +
+      ($("showEn").checked && r.en ? `<div class="en">${esc(r.en)}</div>` : "") +
       (withCode ? `<div class="sc">${esc(r.code)}</div>` : "");
     $("sheet").appendChild(s);
     // 短碼是大寫英數 → alphanumeric mode,容錯拉到最高的 H 仍只需 21×21
@@ -230,25 +263,58 @@ function renderStickers(){
 }
 $("showName").addEventListener("change", renderStickers);
 $("showCode").addEventListener("change", renderStickers);
+$("showEn").addEventListener("change", renderStickers);
 $("printBtn").addEventListener("click", ()=>window.print());
 
 /* ---------- DB ---------- */
 let sb = null;
+
+/* config.js 貼錯網址是最常見的坑,直接顯示實際用到的網址 */
+function showResolvedUrl(){
+  const u = window.SUPA_URL || "(未設定)";
+  $("diag").innerHTML = `目前連線網址:<code>${esc(u)}</code>`;
+}
+/* 舊 config.js 沒更新時的專屬提示 */
+function pathErrorHelp(){
+  return "⚠️ 你的 config.js 還是舊的!網址結尾多了 /rest/v1/。" +
+         "請重新上傳 config.js,或等 GitHub Pages 快取過期(約 10 分鐘)再試。";
+}
+function isPathError(m){ return /PGRST125|Invalid path/i.test(m); }
+
 function initDb(){
   try{
     if(window.SUPA_URL && window.SUPA_KEY && !window.SUPA_URL.includes("YOUR_PROJECT") && window.supabase){
       sb = window.supabase.createClient(window.SUPA_URL, window.SUPA_KEY);
     }
   }catch(e){ sb = null; }
-  $("badge").textContent = sb ? "☁️ 已連線,可以匯入" : "📴 未設定資料庫(仍可存在這台裝置)";
-  if(sb) $("badge").classList.add("ok");
+  showResolvedUrl();
+  if(!sb){
+    $("badge").textContent = "📴 未設定資料庫(仍可存在這台裝置)";
+    return;
+  }
+  testConnection();
+}
+
+/* 真的打一次 API,不要只看 client 建立成功就說「已連線」 */
+async function testConnection(){
+  $("badge").textContent = "⏳ 測試連線中…";
+  $("badge").classList.remove("ok");
+  try{
+    const { error } = await sb.from("cards").select("barcode").limit(1);
+    if(error) throw error;
+    $("badge").textContent = "☁️ 連線正常,可以匯入";
+    $("badge").classList.add("ok");
+  }catch(e){
+    const m = (e && e.message) ? e.message : String(e);
+    $("badge").textContent = isPathError(m) ? pathErrorHelp() : ("⚠️ 連線失敗:" + m);
+  }
 }
 function buildPayload(){
   const out = [];
   rows.forEach(r=>{
-    out.push({ barcode:r.code, name:r.name, emoji:r.emoji, price:r.price, category:r.category });
+    out.push({ barcode:r.code, name:r.name, emoji:r.emoji, price:r.price, category:r.category, en:r.en });
     if($("alsoOrig").checked){
-      out.push({ barcode:r.orig, name:r.name, emoji:r.emoji, price:r.price, category:r.category });
+      out.push({ barcode:r.orig, name:r.name, emoji:r.emoji, price:r.price, category:r.category, en:r.en });
     }
   });
   return out;
@@ -257,7 +323,7 @@ function mergeLocal(payload){
   // 併進遊戲用的 localStorage,遊戲離線也認得
   try{
     const cur = JSON.parse(localStorage.getItem("cashier-cards") || "{}");
-    payload.forEach(p=>{ cur[p.barcode] = { name:p.name, emoji:p.emoji, price:p.price }; });
+    payload.forEach(p=>{ cur[p.barcode] = { name:p.name, emoji:p.emoji, price:p.price, en:p.en }; });
     localStorage.setItem("cashier-cards", JSON.stringify(cur));
     return true;
   }catch(e){ return false; }
@@ -282,9 +348,11 @@ $("importBtn").addEventListener("click", async ()=>{
     $("badge").classList.add("ok");
   }catch(e){
     const m = (e && e.message) ? e.message : String(e);
-    $("badge").textContent = /check|constraint/i.test(m)
-      ? "⚠️ 被資料庫限制擋下:請先執行 db/003_shortcode.sql(已存在這台裝置)"
-      : "⚠️ 匯入失敗:" + m + "(已存在這台裝置)";
+    let msg;
+    if(isPathError(m))                   msg = pathErrorHelp();
+    else if(/check|constraint/i.test(m)) msg = "⚠️ 被資料庫限制擋下:請先執行 db/003_shortcode.sql";
+    else                                 msg = "⚠️ 匯入失敗:" + m;
+    $("badge").textContent = msg + "(卡片已存在這台裝置)";
   }
 });
 

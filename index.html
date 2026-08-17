@@ -6,7 +6,8 @@
 <title>小小收銀員 🛒</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
+<!-- ?v= 版本號:強制瀏覽器/CDN 重抓,改了 config.js 才會立刻生效 -->
+<script src="config.js?v=2"></script>
 <style>
   :root{
     --pink:#F7B7CF;
@@ -125,6 +126,11 @@
   .result-card .veg{font-size:96px;line-height:1;animation:wiggle 1s ease .3s;}
   @keyframes wiggle{25%{transform:rotate(-8deg);}50%{transform:rotate(8deg);}75%{transform:rotate(-4deg);}}
   .result-card .veg-name{margin-top:12px;font-weight:900;font-size:28px;letter-spacing:6px;}
+  .result-card .veg-en{
+    margin-top:6px;font-weight:800;font-size:19px;letter-spacing:1px;
+    color:#fff;text-shadow:0 2px 0 var(--pink-deep);
+    animation:pop .5s .25s both;
+  }
   .praise{font-size:22px;font-weight:900;color:var(--pink-deep);animation:pop .5s .15s both;}
 
   #newCardForm{
@@ -186,6 +192,7 @@
 
   /* 收據價格 */
   .receipt .row small{font-weight:700;color:#B9A;font-size:14px;}
+  .receipt .row em{font-style:normal;font-weight:700;color:var(--pink-deep);font-size:14px;}
   .receipt .row.total-row{border-top:3px solid var(--ink);border-bottom:none;
     margin-top:4px;padding-top:10px;font-size:22px;}
   .receipt .row.total-row .n{color:var(--green);}
@@ -260,6 +267,7 @@
     <div class="settings-row">
       <button class="chip" id="toggleSound">🔊 音效</button>
       <button class="chip" id="toggleVoice">🗣️ 語音</button>
+      <button class="chip" id="toggleEnglish">🔤 英文</button>
     </div>
   </section>
 
@@ -326,7 +334,7 @@
 <script>
 /* ================= data ================= */
 const DEFAULT_CARDS = {
-  "4710123456799": { name: "高麗菜", emoji: "🥬", price: 15 }
+  "4710123456799": { name: "高麗菜", emoji: "🥬", price: 15, en: "Cabbage" }
 };
 let cards = { ...DEFAULT_CARDS };
 let cart = [];
@@ -342,7 +350,7 @@ let paidStack = [];   // 已投入的錢幣,方便「拿回」
 let payTotal = 0;
 
 /* 家長設定,存 localStorage */
-let settings = { sound: true, voice: true };
+let settings = { sound: true, voice: true, english: true };
 function loadSettings(){
   try{
     const s = localStorage.getItem("cashier-settings");
@@ -385,9 +393,11 @@ async function loadCards(){
   const badge = document.getElementById("dbBadge");
   if(!sb){ badge.textContent = "📴 離線模式(未設定資料庫)"; return; }
   try{
-    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price");
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price,en");
     if(error) throw error;
-    (data || []).forEach(r => { cards[r.barcode] = { name: r.name, emoji: r.emoji, price: r.price ?? 10 }; });
+    (data || []).forEach(r => {
+      cards[r.barcode] = { name: r.name, emoji: r.emoji, price: r.price ?? 10, en: r.en || "" };
+    });
     cacheLocal();
     badge.textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
     badge.classList.add("ok");
@@ -395,11 +405,11 @@ async function loadCards(){
     badge.textContent = "📴 離線模式(用上次的卡片)";
   }
 }
-async function saveCard(code, name, emoji, price){
-  cards[code] = { name, emoji, price };
+async function saveCard(code, name, emoji, price, en){
+  cards[code] = { name, emoji, price, en };
   cacheLocal();
   if(sb){
-    try{ await sb.from("cards").insert({ barcode: code, name, emoji, price }); }
+    try{ await sb.from("cards").insert({ barcode: code, name, emoji, price, en }); }
     catch(e){ /* offline or duplicate — local cache still has it */ }
   }
 }
@@ -433,12 +443,22 @@ function beep(freq=1250, dur=0.12, type="square"){
   }catch(e){}
 }
 function fanfare(){ beep(880,.12); setTimeout(()=>beep(1100,.12),120); setTimeout(()=>beep(1320,.25,"triangle"),240); }
-function speak(text){
+/* 唸中文;有英文單字且開著英文時,接著再唸一次英文 */
+function speak(text, en){
   if(!settings.voice) return;
   try{
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "zh-TW"; u.rate = 0.9; u.pitch = 1.3;
-    speechSynthesis.cancel(); speechSynthesis.speak(u);
+    speechSynthesis.cancel();          // 先清掉上一次還沒唸完的
+    if(text){
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "zh-TW"; u.rate = 0.9; u.pitch = 1.3;
+      speechSynthesis.speak(u);
+    }
+    if(en && settings.english){
+      // speak() 會排隊,所以會等中文唸完才唸英文
+      const u2 = new SpeechSynthesisUtterance(en);
+      u2.lang = "en-US"; u2.rate = 0.75; u2.pitch = 1.15;
+      speechSynthesis.speak(u2);
+    }
   }catch(e){}
 }
 
@@ -596,18 +616,21 @@ function foundCard(code){
   updateCart();
   beep();
   if(navigator.vibrate) navigator.vibrate(80);
-  speak(item.name);
+  const showEn = item.en && settings.english;
+  speak(item.name, item.en);
   $("resultContent").innerHTML = `
     <div class="praise">${PRAISES[Math.floor(Math.random()*PRAISES.length)]}</div>
     <div class="result-card">
       <div class="veg">${esc(item.emoji)}</div>
       <div class="veg-name">${esc(item.name)}</div>
+      ${showEn ? `<div class="veg-en">${esc(item.en)}</div>` : ""}
     </div>`;
   $("resultOverlay").classList.add("show");
+  // 要多唸一句英文,畫面就多停一下
   setTimeout(()=>{
     $("resultOverlay").classList.remove("show");
     paused = false;
-  }, 1900);
+  }, showEn ? 2600 : 1900);
 }
 
 function unknownCard(code){
@@ -620,6 +643,7 @@ function unknownCard(code){
       <h3>🆕 新卡片!這是什麼呢?</h3>
       <div class="code">${esc(code)}</div>
       <input id="newName" placeholder="輸入名字,例如:紅蘿蔔" maxlength="8">
+      <input id="newEn" placeholder="英文(可留空),例如:Carrot" maxlength="30">
       <input id="newPrice" type="number" inputmode="numeric" min="1" max="999" value="10" placeholder="價格(元)">
       <div class="emoji-grid" id="emojiGrid">${grid}</div>
       <button class="btn btn-green" id="saveCardBtn" style="font-size:17px">✔ 記住這張卡</button>
@@ -640,7 +664,8 @@ function unknownCard(code){
     let price = parseInt($("newPrice").value, 10);
     if(isNaN(price) || price < 0){ price = 10; }
     price = Math.min(price, 9999);
-    await saveCard(code, name, selEmoji, price);
+    const en = $("newEn").value.trim().slice(0, 30);
+    await saveCard(code, name, selEmoji, price, en);
     $("resultOverlay").classList.remove("show");
     paused = false;
     toast(`記住囉!下次掃到就是「${name}」`);
@@ -663,7 +688,9 @@ function checkout(){
   });
   const total = cartTotal();
   const rows = Object.values(counts)
-    .map(i=>`<div class="row"><span>${esc(i.emoji)} ${esc(i.name)} <small>$${i.price||0}</small></span><span class="n">× ${i.n}</span></div>`)
+    .map(i=>`<div class="row"><span>${esc(i.emoji)} ${esc(i.name)}${
+        (i.en && settings.english) ? ` <em>${esc(i.en)}</em>` : ""
+      } <small>$${i.price||0}</small></span><span class="n">× ${i.n}</span></div>`)
     .join("");
   const totalRow = cart.length
     ? `<div class="row total-row"><span>總共</span><span class="n">$${total}</span></div>`
@@ -763,8 +790,10 @@ $("cartList").addEventListener("click", ev=>{
 function refreshSettingUI(){
   $("toggleSound").classList.toggle("off", !settings.sound);
   $("toggleVoice").classList.toggle("off", !settings.voice);
+  $("toggleEnglish").classList.toggle("off", !settings.english);
   $("toggleSound").textContent = settings.sound ? "🔊 音效" : "🔇 音效";
   $("toggleVoice").textContent = settings.voice ? "🗣️ 語音" : "🤫 語音";
+  $("toggleEnglish").textContent = "🔤 英文";
 }
 $("toggleSound").addEventListener("click", ()=>{
   settings.sound = !settings.sound; saveSettings(); refreshSettingUI();
@@ -773,6 +802,10 @@ $("toggleSound").addEventListener("click", ()=>{
 $("toggleVoice").addEventListener("click", ()=>{
   settings.voice = !settings.voice; saveSettings(); refreshSettingUI();
   if(settings.voice) speak("語音打開囉");
+});
+$("toggleEnglish").addEventListener("click", ()=>{
+  settings.english = !settings.english; saveSettings(); refreshSettingUI();
+  if(settings.english) speak("英文打開囉", "Hello");
 });
 
 loadSettings();

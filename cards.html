@@ -6,7 +6,8 @@
 <title>卡片產生器 🖨️ — 小小收銀員</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js"></script>
+<!-- ?v= 版本號:強制瀏覽器/CDN 重抓,改了 config.js 才會立刻生效 -->
+<script src="config.js?v=2"></script>
 <style>
   :root{
     --pink:#F7B7CF;--pink-deep:#EE8FB6;--cream:#FFF9F2;
@@ -57,6 +58,7 @@
   }
   .card .emoji{font-size:52px;line-height:1;}
   .card .name{font-weight:900;font-size:19px;letter-spacing:3px;margin:6px 0 2px;}
+  .card .en{font-weight:700;font-size:13px;color:#fff;text-shadow:0 1px 0 var(--pink-deep);margin-bottom:2px;}
   .card .price{font-weight:800;font-size:15px;color:var(--ink);margin-bottom:8px;}
   .card .qr{background:#fff;border-radius:8px;padding:8px;display:inline-block;line-height:0;}
   /* 螢幕上顯示 120px;方格保持銳利不做平滑 */
@@ -87,6 +89,7 @@
     <div class="emoji-grid" id="emojiGrid"></div>
     <div class="row">
       <input id="mName" placeholder="名字,例如:紅蘿蔔" maxlength="8">
+      <input id="mEn" placeholder="英文,例如:Carrot" maxlength="30">
       <input id="mPrice" type="number" inputmode="numeric" min="0" max="999" value="10" placeholder="價格">
       <button class="btn btn-green" id="addBtn">產生卡片</button>
     </div>
@@ -131,9 +134,9 @@ async function loadCards(){
   try{ const c = localStorage.getItem("cashier-cards"); if(c) cards = { ...DEFAULT_CARDS, ...JSON.parse(c) }; }catch(e){}
   if(!sb){ $("badge").textContent = "📴 離線模式(未設定資料庫)"; render(); return; }
   try{
-    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price");
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price,en");
     if(error) throw error;
-    (data||[]).forEach(r=>{ cards[r.barcode] = { name:r.name, emoji:r.emoji, price: r.price ?? 10 }; });
+    (data||[]).forEach(r=>{ cards[r.barcode] = { name:r.name, emoji:r.emoji, price: r.price ?? 10, en: r.en || "" }; });
     cacheLocal();
     $("badge").textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
     $("badge").classList.add("ok");
@@ -159,13 +162,14 @@ async function addCard(){
   let price = parseInt($("mPrice").value,10);
   if(isNaN(price) || price < 0) price = 10;
   price = Math.min(price, 9999);
+  const en = $("mEn").value.trim().slice(0,30);
   const code = newCode();
-  cards[code] = { name, emoji: selEmoji, price };
+  cards[code] = { name, emoji: selEmoji, price, en };
   cacheLocal();
   if(sb){
     try{
       const { error } = await sb.from("cards")
-        .insert({ barcode: code, name, emoji: selEmoji, price });
+        .insert({ barcode: code, name, emoji: selEmoji, price, en });
       if(error) throw error;
     }catch(e){
       // 不要無聲失敗:短碼會被舊的長度限制擋下來,要讓使用者看得到
@@ -176,7 +180,7 @@ async function addCard(){
         : "⚠️ 未寫入資料庫:" + m + "(卡片已存在這台裝置)";
     }
   }
-  $("mName").value = "";
+  $("mName").value = ""; $("mEn").value = "";
   render();
   // 捲到最後一張新卡
   const el = $("sheet").lastElementChild; if(el) el.scrollIntoView({behavior:"smooth",block:"center"});
@@ -192,6 +196,7 @@ function render(){
     card.innerHTML = `
       <div class="emoji">${esc(c.emoji||"📦")}</div>
       <div class="name">${esc(c.name)}</div>
+      ${c.en ? `<div class="en">${esc(c.en)}</div>` : ""}
       <div class="price">$${c.price ?? 0}</div>
       <div class="qr"></div>
       <div class="code">${esc(code)}</div>`;
