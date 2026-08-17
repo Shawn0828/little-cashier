@@ -245,6 +245,60 @@
   .cart-empty{text-align:center;color:#A89;font-weight:700;padding:20px;line-height:1.8;}
   .cart-foot{display:flex;align-items:center;justify-content:space-between;
     font-size:20px;font-weight:900;padding-top:6px;border-top:3px dashed #EBD;}
+
+  /* ---- 模式選單 ---- */
+  .mode-list{display:flex;flex-direction:column;gap:10px;width:min(260px,80vw);}
+  .mode-list .btn{font-size:19px;padding:13px 20px;width:100%;}
+
+  /* ---- 任務面板(購物單 / 英文題目) ---- */
+  .task-panel{
+    background:var(--white);border:4px solid var(--ink);border-radius:18px;
+    padding:10px 14px;box-shadow:4px 4px 0 var(--pink-deep);
+    display:flex;flex-direction:column;gap:6px;flex:0 0 auto;
+  }
+  .task-title{font-size:15px;font-weight:900;letter-spacing:1px;text-align:center;}
+  .goal{display:flex;align-items:center;justify-content:space-between;
+    font-size:17px;font-weight:800;padding:2px 4px;}
+  .goal.ok{color:var(--green);}
+  .goal .g-dots{letter-spacing:2px;font-size:15px;}
+  .quiz-word{
+    text-align:center;font-size:26px;font-weight:900;letter-spacing:2px;
+    color:var(--pink-deep);min-height:34px;transition:filter .2s;
+  }
+  .quiz-word.hidden{filter:blur(11px);}
+  .quiz-btns{display:flex;gap:8px;justify-content:center;}
+  .quiz-btns .btn{font-size:15px;padding:8px 16px;}
+  .quiz-score{font-size:34px;font-weight:900;color:var(--pink-deep);letter-spacing:3px;}
+
+  /* 掃到卡片時的任務提示 */
+  .hit-tag{
+    background:var(--green);color:#fff;border:3px solid var(--ink);border-radius:999px;
+    padding:7px 18px;font-weight:900;font-size:16px;box-shadow:3px 3px 0 var(--ink);
+    animation:pop .4s .1s both;
+  }
+  .hit-tag.off{background:var(--white);color:#A89;font-size:14px;}
+
+  /* ---- 圖鑑 ---- */
+  #collectionScreen{gap:10px;}
+  .coll-head{flex:0 0 auto;text-align:center;}
+  .coll-head h2{font-size:22px;letter-spacing:2px;}
+  .coll-prog{font-size:14px;font-weight:800;color:var(--pink-deep);margin-top:2px;}
+  .coll-track{height:14px;background:var(--white);border:3px solid var(--ink);
+    border-radius:999px;overflow:hidden;margin-top:6px;}
+  .coll-bar{height:100%;background:var(--green);width:0;transition:width .5s ease;}
+  .coll-body{flex:1;overflow:auto;min-height:0;padding-bottom:6px;}
+  .coll-cat{font-size:16px;font-weight:900;letter-spacing:2px;margin:12px 0 6px;}
+  .coll-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px;}
+  .coll-card{
+    background:var(--pink);border:3px solid var(--ink);border-radius:14px;
+    padding:8px 4px 6px;text-align:center;box-shadow:2px 2px 0 var(--ink);cursor:pointer;
+  }
+  .coll-card:active{transform:translateY(2px);box-shadow:none;}
+  .coll-card.locked{background:#EFE7EC;box-shadow:none;opacity:.65;cursor:default;}
+  .coll-card.locked .cc-emoji{filter:grayscale(1);opacity:.5;}
+  .cc-emoji{font-size:30px;line-height:1.1;}
+  .cc-name{font-size:13px;font-weight:800;margin-top:2px;}
+  .cc-en{font-size:10px;font-weight:700;color:#fff;text-shadow:0 1px 0 var(--pink-deep);}
 </style>
 </head>
 <body>
@@ -261,8 +315,13 @@
       <div class="veg-name">高麗菜</div>
       <div class="bars"></div>
     </div>
-    <p>拿起你的小卡片，<br>對準相機「嗶」一聲，<br>把菜菜放進購物籃吧!</p>
-    <button class="btn btn-green" id="startBtn">▶ 開始掃描</button>
+    <p>拿起你的小卡片，<br>對準相機「嗶」一聲!</p>
+    <div class="mode-list">
+      <button class="btn btn-green" id="startBtn">🛒 自由購物</button>
+      <button class="btn btn-yellow" id="missionBtn">📝 購物任務</button>
+      <button class="btn btn-pink" id="englishBtn">🔤 英文遊戲</button>
+      <button class="btn btn-ghost" id="collectionBtn">📖 我的圖鑑</button>
+    </div>
     <div class="db-badge" id="dbBadge">連線中…</div>
     <div class="settings-row">
       <button class="chip" id="toggleSound">🔊 音效</button>
@@ -273,6 +332,7 @@
 
   <!-- SCAN -->
   <section class="screen" id="scanScreen">
+    <div class="task-panel" id="taskPanel" style="display:none"></div>
     <div class="camera-frame">
       <div id="reader"></div>
       <div class="scan-line"></div>
@@ -310,6 +370,29 @@
       <button class="btn btn-green dim" id="payDoneBtn" disabled>✔ 付好了</button>
     </div>
   </section>
+
+  <!-- 英文遊戲結算 -->
+  <section class="screen" id="quizEndScreen">
+    <div class="stars" id="quizStars">⭐⭐⭐</div>
+    <h2 style="font-size:24px;letter-spacing:2px;">英文遊戲結束!</h2>
+    <div class="quiz-score" id="quizScore">0 / 5</div>
+    <p style="font-weight:800" id="quizMsg"></p>
+    <div class="scan-actions" style="width:min(320px,86vw)">
+      <button class="btn btn-ghost" id="quizHomeBtn">🏠 回首頁</button>
+      <button class="btn btn-green" id="quizAgainBtn">🔄 再玩一次</button>
+    </div>
+  </section>
+
+  <!-- 圖鑑 -->
+  <section class="screen" id="collectionScreen">
+    <div class="coll-head">
+      <h2>📖 我的圖鑑</h2>
+      <div class="coll-prog" id="collProgress">已收集 0 / 0</div>
+      <div class="coll-track"><div class="coll-bar" id="collBar"></div></div>
+    </div>
+    <div class="coll-body" id="collBody"></div>
+    <button class="btn btn-yellow" id="collBackBtn" style="align-self:center;margin-top:12px">🏠 回首頁</button>
+  </section>
 </main>
 
 <!-- CART OVERLAY -->
@@ -334,7 +417,7 @@
 <script>
 /* ================= data ================= */
 const DEFAULT_CARDS = {
-  "4710123456799": { name: "高麗菜", emoji: "🥬", price: 15, en: "Cabbage" }
+  "4710123456799": { name: "高麗菜", emoji: "🥬", price: 15, en: "Cabbage", category: "蔬菜" }
 };
 let cards = { ...DEFAULT_CARDS };
 let cart = [];
@@ -348,6 +431,29 @@ let torchOn = false;
 const MONEY = [1, 5, 10, 50, 100, 500];
 let paidStack = [];   // 已投入的錢幣,方便「拿回」
 let payTotal = 0;
+
+/* ================= 遊戲模式 ================= */
+/* free = 自由掃描 / mission = 購物任務 / english = 英文遊戲 */
+let mode = "free";
+let mission = null;   // {goals:[{category,emoji,need,got}], done}
+let quiz = null;      // {card, round, total, score, locked}
+
+const CAT_EMOJI = {
+  "蔬菜":"🥬","水果":"🍎","肉類":"🍗","海鮮":"🐟","蛋豆":"🥚",
+  "乳品":"🥛","主食":"🍚","調味":"🍶","零食":"🍪","日用":"🧼","其他":"📦"
+};
+const QUIZ_ROUNDS = 5;
+
+/* 圖鑑:記錄掃過哪些卡片 */
+let seen = {};
+function loadSeen(){
+  try{ seen = JSON.parse(localStorage.getItem("cashier-seen") || "{}"); }catch(e){ seen = {}; }
+}
+function markSeen(code){
+  if(seen[code]) return;
+  seen[code] = 1;
+  try{ localStorage.setItem("cashier-seen", JSON.stringify(seen)); }catch(e){}
+}
 
 /* 家長設定,存 localStorage */
 let settings = { sound: true, voice: true, english: true };
@@ -393,10 +499,13 @@ async function loadCards(){
   const badge = document.getElementById("dbBadge");
   if(!sb){ badge.textContent = "📴 離線模式(未設定資料庫)"; return; }
   try{
-    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price,en");
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price,en,category");
     if(error) throw error;
     (data || []).forEach(r => {
-      cards[r.barcode] = { name: r.name, emoji: r.emoji, price: r.price ?? 10, en: r.en || "" };
+      cards[r.barcode] = {
+        name: r.name, emoji: r.emoji, price: r.price ?? 10,
+        en: r.en || "", category: r.category || "其他"
+      };
     });
     cacheLocal();
     badge.textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
@@ -521,8 +630,32 @@ function confetti(){
 }
 
 /* ================= scanner ================= */
+/* 依模式開始遊戲 */
+async function startMode(m){
+  mode = m;
+  cart = []; updateCart();
+  mission = null; quiz = null;
+  if(m === "mission"){
+    mission = buildMission();
+    if(!mission){ toast("還沒有卡片可以出任務 😅"); mode = "free"; }
+  }
+  if(m === "english"){
+    if(!quizPool().length){
+      toast("卡片還沒有英文單字,先去匯入吧 🔤");
+      mode = "free";
+    }else{
+      quiz = { card:null, round:1, total:QUIZ_ROUNDS, score:0, locked:false };
+    }
+  }
+  $("checkoutBtn").style.display = (mode === "english") ? "none" : "";
+  await startScanner();
+  if(mode === "english" && quiz) nextQuiz();
+  else renderTaskPanel();
+}
+
 async function startScanner(){
   show("scanScreen");
+  renderTaskPanel();
   if(scanning) return;
   const formats = [
     Html5QrcodeSupportedFormats.EAN_13,
@@ -608,24 +741,228 @@ function manualEntry(){
   });
 }
 
+/* ================= 購物任務單 ================= */
+/* 依現有卡片的分類出題,只挑「真的有卡片」的分類,不會出到不可能完成的任務 */
+function buildMission(){
+  const byCat = {};
+  Object.values(cards).forEach(c=>{
+    const cat = c.category || "其他";
+    byCat[cat] = (byCat[cat] || 0) + 1;
+  });
+  let cats = Object.keys(byCat);
+  if(!cats.length) return null;
+  // 洗牌後取 2~3 種分類
+  cats = cats.sort(()=>Math.random()-0.5).slice(0, Math.min(3, cats.length));
+  const goals = cats.map(cat=>({
+    category: cat,
+    emoji: CAT_EMOJI[cat] || "📦",
+    // 需要的數量不超過該分類實際有的卡片數
+    need: Math.min(byCat[cat], 1 + Math.floor(Math.random()*2)),
+    got: 0
+  }));
+  return { goals, done:false };
+}
+function missionRemaining(){
+  if(!mission) return 0;
+  return mission.goals.reduce((s,g)=> s + Math.max(0, g.need - g.got), 0);
+}
+function renderTaskPanel(){
+  const p = $("taskPanel");
+  if(mode === "mission" && mission){
+    const rows = mission.goals.map(g=>{
+      const dots = Array.from({length:g.need}, (_,i)=> i < g.got ? "✅" : "⬜").join("");
+      return `<div class="goal ${g.got>=g.need?'ok':''}">
+                <span class="g-name">${g.emoji} ${esc(g.category)}</span>
+                <span class="g-dots">${dots}</span>
+              </div>`;
+    }).join("");
+    const left = missionRemaining();
+    p.innerHTML = `<div class="task-title">📝 媽媽的購物單${left?"":" — 買齊了! 🎉"}</div>${rows}`;
+    p.style.display = "";
+  }else if(mode === "english" && quiz){
+    // 這是「聽」的遊戲,單字預設遮起來,卡住時才偷看
+    p.innerHTML = `
+      <div class="task-title">🔤 聽英文找商品 (${quiz.round}/${quiz.total}) ⭐${quiz.score}</div>
+      <div class="quiz-word hidden" id="quizWord">${esc(quiz.card.en)}</div>
+      <div class="quiz-btns">
+        <button class="btn btn-ghost" id="replayBtn">🔊 再聽一次</button>
+        <button class="btn btn-ghost" id="peekBtn">👀 偷看</button>
+      </div>`;
+    p.style.display = "";
+    $("replayBtn").addEventListener("click", ()=> sayQuiz());
+    $("peekBtn").addEventListener("click", ()=>{
+      $("quizWord").classList.remove("hidden");
+      $("peekBtn").style.visibility = "hidden";
+    });
+  }else{
+    p.style.display = "none";
+  }
+}
+
+/* 掃到卡片時,更新任務進度;回傳是否算「達成」 */
+function applyMission(item){
+  if(!mission) return null;
+  const g = mission.goals.find(g=> g.category === (item.category||"其他") && g.got < g.need);
+  if(g){ g.got++; return g; }
+  return null;
+}
+
+/* ================= 英文小遊戲 ================= */
+function quizPool(){
+  return Object.entries(cards)
+    .filter(([,c])=> c.en && c.en.trim())
+    .map(([code,c])=>({ code, ...c }));
+}
+function nextQuiz(){
+  const pool = quizPool();
+  if(!pool.length) return false;
+  // 盡量不要連續出同一張
+  let pick = pool[Math.floor(Math.random()*pool.length)];
+  if(pool.length > 1 && quiz && quiz.card && pick.code === quiz.card.code){
+    pick = pool[(pool.indexOf(pick)+1) % pool.length];
+  }
+  quiz.card = pick;
+  quiz.locked = false;
+  renderTaskPanel();
+  setTimeout(sayQuiz, 350);
+  return true;
+}
+function sayQuiz(){
+  if(!quiz || !quiz.card) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(quiz.card.en);
+    u.lang = "en-US"; u.rate = 0.7; u.pitch = 1.15;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function answerQuiz(code, item){
+  if(quiz.locked) return;
+  quiz.locked = true;
+  const right = code === quiz.card.code;
+  if(right){
+    quiz.score++;
+    beep(1200,.1); fanfare();
+    if(navigator.vibrate) navigator.vibrate(80);
+    $("resultContent").innerHTML = `
+      <div class="praise">答對了! 🎉</div>
+      <div class="result-card">
+        <div class="veg">${esc(item.emoji)}</div>
+        <div class="veg-name">${esc(item.name)}</div>
+        <div class="veg-en">${esc(item.en)}</div>
+      </div>`;
+    speak(item.name, item.en);
+  }else{
+    beep(500,.18,"sawtooth");
+    $("resultContent").innerHTML = `
+      <div class="praise" style="color:#C88">再試試看 💪</div>
+      <div class="result-card" style="background:var(--yellow)">
+        <div class="veg">${esc(item.emoji)}</div>
+        <div class="veg-name">${esc(item.name)}</div>
+        <div class="veg-en">要找的是 ${esc(quiz.card.en)}</div>
+      </div>`;
+  }
+  $("resultOverlay").classList.add("show");
+  setTimeout(()=>{
+    $("resultOverlay").classList.remove("show");
+    paused = false;
+    quiz.round++;
+    if(quiz.round > quiz.total) finishQuiz();
+    else nextQuiz();
+  }, right ? 2200 : 2600);
+}
+function finishQuiz(){
+  stopScanner();
+  logQuiz();
+  const stars = quiz.score >= quiz.total ? "⭐⭐⭐" : quiz.score >= quiz.total*0.6 ? "⭐⭐" : "⭐";
+  $("quizStars").textContent = stars;
+  $("quizScore").textContent = `${quiz.score} / ${quiz.total}`;
+  $("quizMsg").textContent = quiz.score >= quiz.total
+    ? "全對!你是英文小天才!"
+    : quiz.score >= quiz.total*0.6 ? "很棒喔!再玩一次會更好!" : "沒關係,多聽幾次就記住了!";
+  show("quizEndScreen");
+  if(quiz.score) { fanfare(); confetti(); }
+}
+async function logQuiz(){
+  if(!sb) return;
+  try{
+    await sb.from("game_sessions").insert({
+      game_type: "english_quiz",
+      score: quiz.score,
+      detail: { total: quiz.total }
+    });
+  }catch(e){}
+}
+
+/* ================= 圖鑑 ================= */
+function openCollection(){
+  const groups = {};
+  Object.entries(cards).forEach(([code,c])=>{
+    const cat = c.category || "其他";
+    (groups[cat] = groups[cat] || []).push({ code, ...c });
+  });
+  const total = Object.keys(cards).length;
+  const got = Object.keys(cards).filter(c=>seen[c]).length;
+  $("collProgress").textContent = `已收集 ${got} / ${total}`;
+  $("collBar").style.width = total ? (got/total*100)+"%" : "0%";
+  $("collBody").innerHTML = Object.keys(groups).sort().map(cat=>{
+    const items = groups[cat].map(c=>{
+      const has = !!seen[c.code];
+      return `<div class="coll-card ${has?'':'locked'}" data-code="${esc(c.code)}">
+                <div class="cc-emoji">${has ? esc(c.emoji) : "❓"}</div>
+                <div class="cc-name">${has ? esc(c.name) : "???"}</div>
+                ${has && c.en ? `<div class="cc-en">${esc(c.en)}</div>` : ""}
+              </div>`;
+    }).join("");
+    return `<div class="coll-cat">${CAT_EMOJI[cat]||"📦"} ${esc(cat)}</div>
+            <div class="coll-grid">${items}</div>`;
+  }).join("");
+  show("collectionScreen");
+}
+
 /* ================= game flow ================= */
 function foundCard(code){
-  paused = true;
   const item = cards[code];
+  if(!item){ unknownCard(code); return; }   // 保險:呼叫端沒檢查也不會炸
+  markSeen(code);                       // 圖鑑點亮
+
+  // 英文遊戲:掃到的卡片是「作答」,不進購物籃
+  if(mode === "english" && quiz){
+    paused = true;
+    answerQuiz(code, item);
+    return;
+  }
+
+  paused = true;
   cart.push({ code, ...item });
   updateCart();
   beep();
   if(navigator.vibrate) navigator.vibrate(80);
+
+  // 購物任務:看看有沒有打勾
+  let goalHit = null, justDone = false;
+  if(mode === "mission" && mission){
+    const before = missionRemaining();
+    goalHit = applyMission(item);
+    justDone = before > 0 && missionRemaining() === 0;
+    renderTaskPanel();
+  }
+
   const showEn = item.en && settings.english;
   speak(item.name, item.en);
+  const tag = goalHit
+    ? `<div class="hit-tag">✅ ${goalHit.emoji} ${esc(goalHit.category)} ${goalHit.got}/${goalHit.need}</div>`
+    : (mode === "mission" ? `<div class="hit-tag off">這個不在單子上,也放進籃子囉</div>` : "");
   $("resultContent").innerHTML = `
-    <div class="praise">${PRAISES[Math.floor(Math.random()*PRAISES.length)]}</div>
+    <div class="praise">${justDone ? "購物單買齊了! 🎉" : PRAISES[Math.floor(Math.random()*PRAISES.length)]}</div>
     <div class="result-card">
       <div class="veg">${esc(item.emoji)}</div>
       <div class="veg-name">${esc(item.name)}</div>
       ${showEn ? `<div class="veg-en">${esc(item.en)}</div>` : ""}
-    </div>`;
+    </div>
+    ${tag}`;
   $("resultOverlay").classList.add("show");
+  if(justDone){ fanfare(); confetti(); speak("購物單買齊了,可以去結帳囉"); }
   // 要多唸一句英文,畫面就多停一下
   setTimeout(()=>{
     $("resultOverlay").classList.remove("show");
@@ -696,9 +1033,15 @@ function checkout(){
     ? `<div class="row total-row"><span>總共</span><span class="n">$${total}</span></div>`
     : "";
   $("receipt").innerHTML = (rows + totalRow) || `<div class="row"><span>籃子空空的 🧺</span></div>`;
-  $("checkoutMsg").textContent = cart.length
+  let msg = cart.length
     ? `一共買了 ${cart.length} 樣,要付 ${total} 元!`
     : "下次多掃幾張卡片試試看吧!";
+  if(mode === "mission" && mission){
+    msg = missionRemaining() === 0
+      ? `購物單全部買齊了! 一共 ${total} 元,你真棒!`
+      : `購物單還差 ${missionRemaining()} 樣,不過也沒關係!`;
+  }
+  $("checkoutMsg").textContent = msg;
   $("payMoneyBtn").style.display = cart.length ? "" : "none";
   show("checkoutScreen");
   if(cart.length){ fanfare(); confetti(); speak(`結帳完成,一共 ${total} 元`); }
@@ -755,19 +1098,32 @@ function finishPay(){
   $("resultOverlay").classList.add("show");
   $("payAgainBtn").addEventListener("click", async ()=>{
     $("resultOverlay").classList.remove("show");
-    cart = []; updateCart(); await startScanner();
+    await startMode(mode);
   });
 }
 
 /* ================= events ================= */
-$("startBtn").addEventListener("click", async ()=>{ beep(900,.08); await startScanner(); });
+$("startBtn").addEventListener("click", async ()=>{ beep(900,.08); await startMode("free"); });
+$("missionBtn").addEventListener("click", async ()=>{ beep(900,.08); await startMode("mission"); });
+$("englishBtn").addEventListener("click", async ()=>{ beep(900,.08); await startMode("english"); });
+$("collectionBtn").addEventListener("click", ()=>{ beep(900,.08); openCollection(); });
+$("collBackBtn").addEventListener("click", ()=> show("startScreen"));
+$("quizHomeBtn").addEventListener("click", ()=> show("startScreen"));
+$("quizAgainBtn").addEventListener("click", async ()=> await startMode("english"));
+
+/* 圖鑑:點卡片重聽發音 */
+$("collBody").addEventListener("click", ev=>{
+  const el = ev.target.closest(".coll-card"); if(!el) return;
+  const c = cards[el.dataset.code];
+  if(!c || !seen[el.dataset.code]) return;
+  speak(c.name, c.en);
+});
+
 $("stopBtn").addEventListener("click", async ()=>{ await stopScanner(); show("startScreen"); });
 $("checkoutBtn").addEventListener("click", checkout);
 $("torchBtn").addEventListener("click", toggleTorch);
 $("manualBtn").addEventListener("click", manualEntry);
-$("againBtn").addEventListener("click", async ()=>{
-  cart = []; updateCart(); await startScanner();
-});
+$("againBtn").addEventListener("click", async ()=>{ await startMode(mode === "english" ? "free" : mode); });
 $("payMoneyBtn").addEventListener("click", startPay);
 
 /* 付錢面板 */
@@ -809,6 +1165,7 @@ $("toggleEnglish").addEventListener("click", ()=>{
 });
 
 loadSettings();
+loadSeen();
 refreshSettingUI();
 initDb();
 loadCards();
