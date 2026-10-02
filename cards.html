@@ -32,6 +32,8 @@
   }
   #mName{flex:1;min-width:140px;}
   #mPrice{width:110px;}
+  #mCat{border:3px solid var(--ink);border-radius:12px;padding:10px 8px;font-size:16px;
+    font-family:inherit;background:#fff;color:inherit;}
   .emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin-bottom:12px;}
   .emoji-grid button{
     font-size:24px;background:var(--cream);border:2px solid transparent;border-radius:10px;
@@ -91,6 +93,7 @@
       <input id="mName" placeholder="名字,例如:紅蘿蔔" maxlength="8">
       <input id="mEn" placeholder="英文,例如:Carrot" maxlength="30">
       <input id="mPrice" type="number" inputmode="numeric" min="0" max="999" value="10" placeholder="價格">
+      <select id="mCat" title="分類(購物任務、圖鑑會用到)"></select>
       <button class="btn btn-green" id="addBtn">產生卡片</button>
     </div>
   </div>
@@ -107,6 +110,14 @@ const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","
 const DEFAULT_CARDS = { "4710123456799": { name:"高麗菜", emoji:"🥬", price:15 } };
 let cards = { ...DEFAULT_CARDS };
 let selEmoji = "🥕";
+const CATS = ["蔬菜","水果","肉類","海鮮","蛋豆","乳品","主食","調味","零食","日用","其他"];
+const EMOJI_CAT = {
+  "🥬":"蔬菜","🥕":"蔬菜","🍅":"蔬菜","🌽":"蔬菜","🥦":"蔬菜","🥒":"蔬菜","🍆":"蔬菜","🥔":"蔬菜",
+  "🧅":"蔬菜","🍄":"蔬菜","🎃":"蔬菜","🌶️":"蔬菜","🍎":"水果","🍌":"水果","🍇":"水果","🍓":"水果",
+  "🍊":"水果","🍉":"水果","🥝":"水果","🍑":"水果","🥚":"蛋豆","🥛":"乳品","🧀":"乳品","🍞":"主食",
+  "🍚":"主食","🍜":"主食","🐟":"海鮮","🍗":"肉類","🧃":"乳品","🍪":"零食","🍫":"零食","🍬":"零食"
+};
+let catTouched = false;
 let sb = null;
 
 const $ = id => document.getElementById(id);
@@ -117,6 +128,7 @@ $("emojiGrid").innerHTML = EMOJIS.map(e=>`<button data-e="${e}" class="${e===sel
 $("emojiGrid").addEventListener("click", ev=>{
   const b = ev.target.closest("button[data-e]"); if(!b) return;
   selEmoji = b.dataset.e;
+  if(!catTouched && EMOJI_CAT[selEmoji]) $("mCat").value = EMOJI_CAT[selEmoji];
   document.querySelectorAll("#emojiGrid button").forEach(x=>x.classList.remove("sel"));
   b.classList.add("sel");
 });
@@ -134,9 +146,9 @@ async function loadCards(){
   try{ const c = localStorage.getItem("cashier-cards"); if(c) cards = { ...DEFAULT_CARDS, ...JSON.parse(c) }; }catch(e){}
   if(!sb){ $("badge").textContent = "📴 離線模式(未設定資料庫)"; render(); return; }
   try{
-    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price,en");
+    const { data, error } = await sb.from("cards").select("barcode,name,emoji,price,en,category");
     if(error) throw error;
-    (data||[]).forEach(r=>{ cards[r.barcode] = { name:r.name, emoji:r.emoji, price: r.price ?? 10, en: r.en || "" }; });
+    (data||[]).forEach(r=>{ cards[r.barcode] = { name:r.name, emoji:r.emoji, price: r.price ?? 10, en: r.en || "", category: r.category || "其他" }; });
     cacheLocal();
     $("badge").textContent = `☁️ 已同步 ${Object.keys(cards).length} 張卡片`;
     $("badge").classList.add("ok");
@@ -164,12 +176,13 @@ async function addCard(){
   price = Math.min(price, 9999);
   const en = $("mEn").value.trim().slice(0,30);
   const code = newCode();
-  cards[code] = { name, emoji: selEmoji, price, en };
+  const category = $("mCat").value || "其他";
+  cards[code] = { name, emoji: selEmoji, price, en, category };
   cacheLocal();
   if(sb){
     try{
       const { error } = await sb.from("cards")
-        .insert({ barcode: code, name, emoji: selEmoji, price, en });
+        .insert({ barcode: code, name, emoji: selEmoji, price, en, category });
       if(error) throw error;
     }catch(e){
       // 不要無聲失敗:短碼會被舊的長度限制擋下來,要讓使用者看得到
@@ -208,6 +221,9 @@ function render(){
   });
 }
 
+$("mCat").innerHTML = CATS.map(c=>`<option value="${c}">${c}</option>`).join("");
+$("mCat").value = EMOJI_CAT[selEmoji] || "其他";
+$("mCat").addEventListener("change", ()=>{ catTouched = true; });
 $("addBtn").addEventListener("click", addCard);
 $("mName").addEventListener("keydown", e=>{ if(e.key==="Enter") addCard(); });
 $("printBtn").addEventListener("click", ()=>window.print());

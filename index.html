@@ -150,6 +150,15 @@
     padding:6px 0;cursor:pointer;
   }
   .emoji-grid button.sel{border-color:var(--ink);background:var(--yellow);}
+  .cat-label{font-size:13px;font-weight:800;color:#997;text-align:center;margin-bottom:-6px;}
+  .cat-row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
+  .cat-row button{
+    font-family:inherit;font-size:13px;font-weight:800;color:var(--ink);
+    background:var(--cream);border:2px solid transparent;border-radius:999px;
+    padding:4px 10px;cursor:pointer;
+  }
+  .cat-row button.sel{border-color:var(--ink);background:var(--yellow);}
+  #newCardForm{max-height:92vh;overflow:auto;}
 
   #checkoutScreen{align-items:center;justify-content:center;gap:16px;text-align:center;}
   #checkoutScreen h2{font-size:26px;letter-spacing:3px;}
@@ -444,6 +453,14 @@ const CAT_EMOJI = {
 };
 const QUIZ_ROUNDS = 5;
 
+/* 新增卡片時,依選的 emoji 先猜一個分類(家長可以再改) */
+const EMOJI_CAT = {
+  "🥬":"蔬菜","🥕":"蔬菜","🍅":"蔬菜","🌽":"蔬菜","🥦":"蔬菜","🥒":"蔬菜",
+  "🍆":"蔬菜","🥔":"蔬菜","🧅":"蔬菜","🍄":"蔬菜","🎃":"蔬菜","🌶️":"蔬菜",
+  "🍎":"水果","🍌":"水果","🍇":"水果","🍓":"水果","🍊":"水果","🍉":"水果",
+  "🥚":"蛋豆","🥛":"乳品","🧀":"乳品","🍞":"主食","🐟":"海鮮","🍗":"肉類"
+};
+
 /* 圖鑑:記錄掃過哪些卡片 */
 let seen = {};
 function loadSeen(){
@@ -514,12 +531,25 @@ async function loadCards(){
     badge.textContent = "📴 離線模式(用上次的卡片)";
   }
 }
-async function saveCard(code, name, emoji, price, en){
-  cards[code] = { name, emoji, price, en };
+/* 存卡片:本機一定存;雲端結果回傳給呼叫端顯示,不要默默失敗
+   注意 supabase-js 不會 throw,資料庫錯誤是放在回傳的 { error } 裡 */
+async function saveCard(code, name, emoji, price, en, category){
+  cards[code] = { name, emoji, price, en, category };
   cacheLocal();
-  if(sb){
-    try{ await sb.from("cards").insert({ barcode: code, name, emoji, price, en }); }
-    catch(e){ /* offline or duplicate — local cache still has it */ }
+  if(!sb) return { cloud:false, msg:"沒有連資料庫" };
+  try{
+    const { error } = await sb.from("cards")
+      .insert({ barcode: code, name, emoji, price, en, category });
+    if(error) throw error;
+    return { cloud:true };
+  }catch(e){
+    const m = (e && e.message) ? e.message : String(e);
+    if(/duplicate|23505/i.test(m))        return { cloud:false, msg:"雲端已經有這張卡片了" };
+    if(/check|constraint/i.test(m))       return { cloud:false, msg:"資料庫限制擋下,請執行 db/003_shortcode.sql" };
+    if(/column|schema cache|PGRST204/i.test(m))
+                                          return { cloud:false, msg:"資料庫缺欄位,請執行 db/002、004 的 migration" };
+    if(/fetch|network|Failed/i.test(m))   return { cloud:false, msg:"連不上網路" };
+    return { cloud:false, msg:m };
   }
 }
 async function logSession(){
@@ -649,6 +679,8 @@ async function startMode(m){
   }
   $("checkoutBtn").style.display = (mode === "english") ? "none" : "";
   await startScanner();
+  // 相機沒開成功(拒絕授權等),startScanner 已經退回首頁,不要在首頁開始出題
+  if(!scanning){ quiz = null; mission = null; mode = "free"; return; }
   if(mode === "english" && quiz) nextQuiz();
   else renderTaskPanel();
 }
@@ -778,6 +810,11 @@ function renderTaskPanel(){
     }).join("");
     const left = missionRemaining();
     p.innerHTML = `<div class="task-title">📝 媽媽的購物單${left?"":" — 買齊了! 🎉"}</div>${rows}`;
+    p.style.display = "";
+  }else if(mode === "english" && quiz && !quiz.card){
+    // 相機還在啟動、第一題還沒出:startScanner() 會先畫面板再開相機,
+    // 這裡不能讀 quiz.card,否則會在開相機前當掉(相機授權就不會跳出來)
+    p.innerHTML = `<div class="task-title">🔤 聽英文找商品 — 準備中…</div>`;
     p.style.display = "";
   }else if(mode === "english" && quiz){
     // 這是「聽」的遊戲,單字預設遮起來,卡住時才偷看
@@ -928,6 +965,7 @@ function foundCard(code){
 
   // 英文遊戲:掃到的卡片是「作答」,不進購物籃
   if(mode === "english" && quiz){
+    if(!quiz.card) return;              // 第一題還沒出,先不算作答
     paused = true;
     answerQuiz(code, item);
     return;
@@ -974,7 +1012,11 @@ function unknownCard(code){
   paused = true;
   beep(600,.15,"sawtooth");
   let selEmoji = "🥬";
+  let selCat = EMOJI_CAT[selEmoji] || "其他";
+  let catTouched = false;                 // 家長手動選過分類,就不再跟著 emoji 自動改
   const grid = EMOJIS.map(e=>`<button type="button" data-e="${e}" class="${e===selEmoji?'sel':''}">${e}</button>`).join("");
+  const catRow = Object.keys(CAT_EMOJI).map(c=>
+    `<button type="button" data-c="${c}" class="${c===selCat?'sel':''}">${CAT_EMOJI[c]} ${c}</button>`).join("");
   $("resultContent").innerHTML = `
     <div id="newCardForm">
       <h3>🆕 新卡片!這是什麼呢?</h3>
@@ -983,6 +1025,8 @@ function unknownCard(code){
       <input id="newEn" placeholder="英文(可留空),例如:Carrot" maxlength="30">
       <input id="newPrice" type="number" inputmode="numeric" min="1" max="999" value="10" placeholder="價格(元)">
       <div class="emoji-grid" id="emojiGrid">${grid}</div>
+      <div class="cat-label">分類(購物任務、圖鑑會用到)</div>
+      <div class="cat-row" id="catRow">${catRow}</div>
       <button class="btn btn-green" id="saveCardBtn" style="font-size:17px">✔ 記住這張卡</button>
       <button class="btn btn-ghost" id="skipCardBtn" style="font-size:15px;padding:10px">先跳過</button>
     </div>`;
@@ -994,6 +1038,17 @@ function unknownCard(code){
     selEmoji = b.dataset.e;
     document.querySelectorAll("#emojiGrid button").forEach(x=>x.classList.remove("sel"));
     b.classList.add("sel");
+    if(!catTouched && EMOJI_CAT[selEmoji]) pickCat(EMOJI_CAT[selEmoji]);
+  });
+  function pickCat(c){
+    selCat = c;
+    document.querySelectorAll("#catRow button").forEach(x=>x.classList.toggle("sel", x.dataset.c === c));
+  }
+  $("catRow").addEventListener("click", ev=>{
+    const b = ev.target.closest("button[data-c]");
+    if(!b) return;
+    catTouched = true;
+    pickCat(b.dataset.c);
   });
   $("saveCardBtn").addEventListener("click", async ()=>{
     const name = $("newName").value.trim();
@@ -1002,10 +1057,13 @@ function unknownCard(code){
     if(isNaN(price) || price < 0){ price = 10; }
     price = Math.min(price, 9999);
     const en = $("newEn").value.trim().slice(0, 30);
-    await saveCard(code, name, selEmoji, price, en);
+    $("saveCardBtn").disabled = true;
+    const res = await saveCard(code, name, selEmoji, price, en, selCat);
     $("resultOverlay").classList.remove("show");
     paused = false;
-    toast(`記住囉!下次掃到就是「${name}」`);
+    toast(res.cloud
+      ? `記住囉!下次掃到就是「${name}」`
+      : `「${name}」只存在這台裝置:${res.msg}`);
     foundCard(code);
   });
   $("skipCardBtn").addEventListener("click", ()=>{
