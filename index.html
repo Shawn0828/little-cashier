@@ -48,6 +48,15 @@
     display:flex;align-items:center;gap:6px;
   }
   .cart-pill.bump{animation:bump .4s ease;}
+  .head-right{display:flex;align-items:center;gap:8px;}
+  .lang-pill{
+    font-family:inherit;font-weight:900;font-size:14px;color:var(--ink);cursor:pointer;
+    background:var(--white);border:3px solid var(--ink);border-radius:999px;
+    padding:6px 12px;box-shadow:3px 3px 0 var(--pink-deep);
+  }
+  .lang-pill.en{background:var(--yellow);}
+  .lang-pill:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--pink-deep);}
+  .chip.na{opacity:.35;}
   @keyframes bump{30%{transform:scale(1.25) rotate(-6deg);}}
 
   main{flex:1;display:flex;flex-direction:column;position:relative;z-index:1;padding:0 16px 16px;min-height:0;}
@@ -313,7 +322,10 @@
 <body>
 <header>
   <h1><span class="emoji">🛒</span> 小小收銀員</h1>
-  <div class="cart-pill" id="cartPill">🧺 <span id="cartCount">0</span></div>
+  <div class="head-right">
+    <button class="lang-pill" id="langBtn" title="切換中文 / English 語音">中文</button>
+    <div class="cart-pill" id="cartPill">🧺 <span id="cartCount">0</span></div>
+  </div>
 </header>
 
 <main>
@@ -335,7 +347,7 @@
     <div class="settings-row">
       <button class="chip" id="toggleSound">🔊 音效</button>
       <button class="chip" id="toggleVoice">🗣️ 語音</button>
-      <button class="chip" id="toggleEnglish">🔤 英文</button>
+      <button class="chip" id="toggleEnglish">🔤 加唸英文</button>
     </div>
   </section>
 
@@ -473,7 +485,7 @@ function markSeen(code){
 }
 
 /* 家長設定,存 localStorage */
-let settings = { sound: true, voice: true, english: true };
+let settings = { sound: true, voice: true, english: true, lang: "zh" };   // lang: "zh" | "en"
 function loadSettings(){
   try{
     const s = localStorage.getItem("cashier-settings");
@@ -486,6 +498,8 @@ function saveSettings(){
 
 const EMOJIS = ["🥬","🥕","🍅","🌽","🥦","🥒","🍆","🥔","🧅","🍄","🎃","🌶️","🍎","🍌","🍇","🍓","🍊","🍉","🥚","🥛","🍞","🧀","🐟","🍗"];
 const PRAISES = ["嗶!掃到囉!","太棒了!","好厲害!","嗶嗶~收到!","放進籃子囉!","你是掃描高手!"];
+const PRAISES_EN = ["Beep! Got it!","Great job!","Awesome!","Into the basket!","Super scanner!","Well done!"];
+function praise(){ const a = settings.lang === "en" ? PRAISES_EN : PRAISES; return a[Math.floor(Math.random()*a.length)]; }
 
 /* escape any user-provided string before putting it in HTML */
 function esc(s){
@@ -582,24 +596,41 @@ function beep(freq=1250, dur=0.12, type="square"){
   }catch(e){}
 }
 function fanfare(){ beep(880,.12); setTimeout(()=>beep(1100,.12),120); setTimeout(()=>beep(1320,.25,"triangle"),240); }
-/* 唸中文;有英文單字且開著英文時,接著再唸一次英文 */
-function speak(text, en){
+/* ================= 語音 =================
+   settings.lang = "zh":唸中文;商品名稱唸完中文,若開著「加唸英文」再唸英文
+   settings.lang = "en":整個流程都唸英文                                  */
+function utter(text, lang){
+  const u = new SpeechSynthesisUtterance(text);
+  if(lang === "en"){ u.lang = "en-US"; u.rate = 0.8; u.pitch = 1.15; }
+  else             { u.lang = "zh-TW"; u.rate = 0.9; u.pitch = 1.3; }
+  speechSynthesis.speak(u);            // speak() 會排隊,前一句唸完才唸下一句
+}
+/* 一般句子:依語言模式擇一。queue = 不打斷正在唸的(例如接在商品名稱後面) */
+function say(zh, en, queue){
   if(!settings.voice) return;
   try{
-    speechSynthesis.cancel();          // 先清掉上一次還沒唸完的
-    if(text){
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "zh-TW"; u.rate = 0.9; u.pitch = 1.3;
-      speechSynthesis.speak(u);
-    }
-    if(en && settings.english){
-      // speak() 會排隊,所以會等中文唸完才唸英文
-      const u2 = new SpeechSynthesisUtterance(en);
-      u2.lang = "en-US"; u2.rate = 0.75; u2.pitch = 1.15;
-      speechSynthesis.speak(u2);
+    if(!queue) speechSynthesis.cancel();
+    if(settings.lang === "en" && en) utter(en, "en");
+    else if(zh)                      utter(zh, "zh");
+  }catch(e){}
+}
+/* 商品名稱 */
+function sayItem(item){
+  if(!settings.voice || !item) return;
+  try{
+    speechSynthesis.cancel();
+    if(settings.lang === "en"){
+      // 沒有英文的卡片(例如遊戲內新增時沒填)才退回唸中文
+      utter(item.en || item.name, item.en ? "en" : "zh");
+    }else{
+      utter(item.name, "zh");
+      if(item.en && settings.english) utter(item.en, "en");
     }
   }catch(e){}
 }
+/* 結果畫面要不要顯示英文、要停留多久 */
+function showsEnglish(item){ return !!(item && item.en && (settings.lang === "en" || settings.english)); }
+function speaksTwoNames(item){ return settings.lang !== "en" && showsEnglish(item); }
 
 /* ================= ui helpers ================= */
 const $ = id => document.getElementById(id);
@@ -888,7 +919,7 @@ function answerQuiz(code, item){
         <div class="veg-name">${esc(item.name)}</div>
         <div class="veg-en">${esc(item.en)}</div>
       </div>`;
-    speak(item.name, item.en);
+    sayItem(item);
   }else{
     beep(500,.18,"sawtooth");
     $("resultContent").innerHTML = `
@@ -986,13 +1017,13 @@ function foundCard(code){
     renderTaskPanel();
   }
 
-  const showEn = item.en && settings.english;
-  speak(item.name, item.en);
+  const showEn = showsEnglish(item);
+  sayItem(item);
   const tag = goalHit
     ? `<div class="hit-tag">✅ ${goalHit.emoji} ${esc(goalHit.category)} ${goalHit.got}/${goalHit.need}</div>`
     : (mode === "mission" ? `<div class="hit-tag off">這個不在單子上,也放進籃子囉</div>` : "");
   $("resultContent").innerHTML = `
-    <div class="praise">${justDone ? "購物單買齊了! 🎉" : PRAISES[Math.floor(Math.random()*PRAISES.length)]}</div>
+    <div class="praise">${justDone ? (settings.lang === "en" ? "List complete! 🎉" : "購物單買齊了! 🎉") : praise()}</div>
     <div class="result-card">
       <div class="veg">${esc(item.emoji)}</div>
       <div class="veg-name">${esc(item.name)}</div>
@@ -1000,12 +1031,13 @@ function foundCard(code){
     </div>
     ${tag}`;
   $("resultOverlay").classList.add("show");
-  if(justDone){ fanfare(); confetti(); speak("購物單買齊了,可以去結帳囉"); }
-  // 要多唸一句英文,畫面就多停一下
+  if(justDone){ fanfare(); confetti();
+    say("購物單買齊了,可以去結帳囉", "Your shopping list is complete. Time to check out!", true); }
+  // 中文模式要多唸一句英文、或買齊了要多唸一句,畫面就多停一下
   setTimeout(()=>{
     $("resultOverlay").classList.remove("show");
     paused = false;
-  }, showEn ? 2600 : 1900);
+  }, justDone ? 3600 : speaksTwoNames(item) ? 2600 : 1900);
 }
 
 function unknownCard(code){
@@ -1084,7 +1116,7 @@ function checkout(){
   const total = cartTotal();
   const rows = Object.values(counts)
     .map(i=>`<div class="row"><span>${esc(i.emoji)} ${esc(i.name)}${
-        (i.en && settings.english) ? ` <em>${esc(i.en)}</em>` : ""
+        showsEnglish(i) ? ` <em>${esc(i.en)}</em>` : ""
       } <small>$${i.price||0}</small></span><span class="n">× ${i.n}</span></div>`)
     .join("");
   const totalRow = cart.length
@@ -1102,7 +1134,7 @@ function checkout(){
   $("checkoutMsg").textContent = msg;
   $("payMoneyBtn").style.display = cart.length ? "" : "none";
   show("checkoutScreen");
-  if(cart.length){ fanfare(); confetti(); speak(`結帳完成,一共 ${total} 元`); }
+  if(cart.length){ fanfare(); confetti(); say(`結帳完成,一共 ${total} 元`, `Checkout complete. The total is ${total} dollars.`); }
 }
 
 /* ================= 付錢找零 ================= */
@@ -1115,7 +1147,7 @@ function startPay(){
   $("moneyGrid").innerHTML = grid;
   renderPaid();
   show("payScreen");
-  speak(`請付 ${payTotal} 元`);
+  say(`請付 ${payTotal} 元`, `Please pay ${payTotal} dollars.`);
 }
 function paidAmount(){ return paidStack.reduce((a,b)=>a+b, 0); }
 function renderPaid(){
@@ -1145,7 +1177,8 @@ function finishPay(){
   const change = paid - payTotal;
   fanfare(); confetti();
   const msg = change === 0 ? "剛剛好,不用找零!" : `找你 ${change} 元`;
-  speak("付款成功," + msg);
+  say("付款成功," + msg,
+      "Payment complete. " + (change === 0 ? "Exact amount, no change." : `Here is your change, ${change} dollars.`));
   $("resultContent").innerHTML = `
     <div class="praise">付款成功! 🎉</div>
     <div class="result-card">
@@ -1174,7 +1207,7 @@ $("collBody").addEventListener("click", ev=>{
   const el = ev.target.closest(".coll-card"); if(!el) return;
   const c = cards[el.dataset.code];
   if(!c || !seen[el.dataset.code]) return;
-  speak(c.name, c.en);
+  sayItem(c);
 });
 
 $("stopBtn").addEventListener("click", async ()=>{ await stopScanner(); show("startScreen"); });
@@ -1207,7 +1240,11 @@ function refreshSettingUI(){
   $("toggleEnglish").classList.toggle("off", !settings.english);
   $("toggleSound").textContent = settings.sound ? "🔊 音效" : "🔇 音效";
   $("toggleVoice").textContent = settings.voice ? "🗣️ 語音" : "🤫 語音";
-  $("toggleEnglish").textContent = "🔤 英文";
+  $("toggleEnglish").textContent = "🔤 加唸英文";
+  // 英文模式本來就全部唸英文,這個開關暫時用不到
+  $("toggleEnglish").classList.toggle("na", settings.lang === "en");
+  $("langBtn").textContent = settings.lang === "en" ? "English" : "中文";
+  $("langBtn").classList.toggle("en", settings.lang === "en");
 }
 $("toggleSound").addEventListener("click", ()=>{
   settings.sound = !settings.sound; saveSettings(); refreshSettingUI();
@@ -1215,11 +1252,17 @@ $("toggleSound").addEventListener("click", ()=>{
 });
 $("toggleVoice").addEventListener("click", ()=>{
   settings.voice = !settings.voice; saveSettings(); refreshSettingUI();
-  if(settings.voice) speak("語音打開囉");
+  if(settings.voice) say("語音打開囉", "Voice on.");
+});
+$("langBtn").addEventListener("click", ()=>{
+  settings.lang = settings.lang === "en" ? "zh" : "en";
+  saveSettings(); refreshSettingUI();
+  beep(900,.06);
+  say("中文", "English");
 });
 $("toggleEnglish").addEventListener("click", ()=>{
   settings.english = !settings.english; saveSettings(); refreshSettingUI();
-  if(settings.english) speak("英文打開囉", "Hello");
+  if(settings.english) say("英文打開囉", "English on.");
 });
 
 loadSettings();
